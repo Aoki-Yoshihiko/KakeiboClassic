@@ -259,15 +259,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
+
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           // 左スワイプ：確定
           return await _showConfirmDialog(context, '予定を確定', 'この予定を実績に移動しますか？');
         } else {
           // 右スワイプ：削除
-          return await _showConfirmDialog(context, '予定を削除', 'この予定を削除しますか？');
+          return await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('予定を削除'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('「${scheduledItem.title}」を削除しますか？'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '⚠️ 注意',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text('• 固定項目の場合、将来の全ての予定も削除されます'),
+                        Text('• 既存の実績は削除されません'),
+                        Text('• この操作は取り消せません'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('キャンセル'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                  child: const Text('削除'),
+                ),
+              ],
+            ),
+          );
         }
       },
+
       onDismissed: (direction) {
         if (direction == DismissDirection.startToEnd) {
           _confirmScheduledItem(scheduledItem, transactionService);
