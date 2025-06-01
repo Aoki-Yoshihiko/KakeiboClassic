@@ -7,7 +7,7 @@ import '../services/transaction_service.dart';
 import '../screens/settings_screen.dart';
 import '../screens/summary_screen.dart';
 import '../screens/add_transaction_screen.dart';
-import '../widgets/amount_input_dialog.dart'; // 追加
+import '../widgets/amount_input_dialog.dart';
 
 // selectedMonthProvider は、通常は別のファイル (例: providers/selected_month_provider.dart)
 // で定義することをお勧めしますが、今回はこのファイル内で定義します。
@@ -25,21 +25,16 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  // PageController は現在のコードでは使用されていないため、削除しました。
-  // late PageController _pageController;
-  // int _currentPageIndex = 12;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // _pageController = PageController(initialPage: _currentPageIndex);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    // _pageController.dispose();
     super.dispose();
   }
 
@@ -60,7 +55,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
       currentMonth.year,
       currentMonth.month + delta,
     );
-    // Provider の状態を更新することで、UIが自動的に再構築されます
     ref.read(selectedMonthProvider.notifier).state = newMonth;
   }
 
@@ -68,15 +62,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
   Future<void> _showMonthYearPicker(BuildContext context, WidgetRef ref) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: ref.read(selectedMonthProvider), // 現在の月を初期値に設定
-      firstDate: DateTime(2000), // 選択可能な開始年
-      lastDate: DateTime(2100), // 選択可能な終了年
-      initialDatePickerMode: DatePickerMode.year, // 年から選択を開始
-      locale: const Locale('ja', 'JP'), // 日本語ロケールを設定
+      initialDate: ref.read(selectedMonthProvider),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      initialDatePickerMode: DatePickerMode.year,
+      locale: const Locale('ja', 'JP'),
     );
 
     if (picked != null) {
-      // 選択された月の1日を設定して Provider の状態を更新
       ref.read(selectedMonthProvider.notifier).state = DateTime(picked.year, picked.month, 1);
     }
   }
@@ -106,72 +99,94 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     );
   }
 
-  // 予定を実績として確定するメソッド（金額入力対応版）
+  // UIを強制更新するヘルパーメソッド
+  void _forceUpdate() {
+    final currentMonth = ref.read(selectedMonthProvider);
+    // 強制的にProviderを無効化して再構築
+    ref.invalidate(transactionServiceProvider);
+    // 現在の状態を一度リセットしてから再設定することで、確実に更新
+    ref.read(selectedMonthProvider.notifier).state = DateTime(currentMonth.year, currentMonth.month, 1);
+  }
+
+  // 予定を実績として確定するメソッド（修正版）
   void _confirmScheduledItem(Transaction scheduledItem, TransactionService transactionService) async {
     double finalAmount = scheduledItem.amount;
     
-    // 金額が0円の場合は金額入力ダイアログを表示
-    if (scheduledItem.amount == 0.0) {
+    // showAmountInSchedule が false の場合（毎回入力設定）は金額入力ダイアログを表示
+    if (!scheduledItem.showAmountInSchedule) {
       final double? inputAmount = await showAmountInputDialog(
         context,
-        initialAmount: 0.0,
+        initialAmount: scheduledItem.amount,
       );
       
       if (inputAmount == null) {
-        // ユーザーがキャンセルした場合
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('実績化をキャンセルしました')),
         );
         return;
       }
-      finalAmount = inputAmount; // ユーザーが入力した金額（0円も含む）
+      finalAmount = inputAmount;
     }
     
-    final confirmedTransaction = scheduledItem.copyWith(
-      id: '${DateTime.now().millisecondsSinceEpoch}_from_scheduled',
-      amount: finalAmount, // 確定した金額を設定
-      isFixedItem: false,
-      fixedMonths: [],
-      fixedDay: 1,
-      holidayHandling: HolidayHandling.none,
-      showAmountInSchedule: false,
-      memo: '${scheduledItem.memo ?? ''} (予定から確定)',
-      createdAt: DateTime.now(),
-    );
+    print('=== 実績確定デバッグ ===');
+    print('元の予定日付: ${scheduledItem.date}');
+    print('確定する金額: $finalAmount');
     
-    await transactionService.addTransaction(confirmedTransaction);
+    // 完全に独立した実績Transactionを作成
+    final actualTransaction = Transaction()
+      ..id = '${DateTime.now().millisecondsSinceEpoch}_actual_${scheduledItem.title.replaceAll(' ', '_')}'
+      ..title = scheduledItem.title
+      ..amount = finalAmount
+      ..date = scheduledItem.date // 予定の日付をそのまま使用
+      ..type = scheduledItem.type
+      ..isFixedItem = false // 重要: 実績なので絶対にfalse
+      ..fixedMonths = [] // 実績には不要
+      ..fixedDay = 1 // 実績には不要
+      ..holidayHandling = HolidayHandling.none // 実績には不要
+      ..showAmountInSchedule = false // 実績には不要
+      ..memo = '${scheduledItem.memo ?? ''} (予定から確定)'
+      ..createdAt = DateTime.now() // 作成日時は現在
+      ..updatedAt = DateTime.now();
+    
+    print('作成する実績: ID=${actualTransaction.id}, 日付=${actualTransaction.date}, 金額=${actualTransaction.amount}');
+    
+    // 新しいaddActualTransactionメソッドを使用
+    await transactionService.addActualTransaction(actualTransaction);
     
     // UI更新
-    ref.read(selectedMonthProvider.notifier).state = DateTime(
-      ref.read(selectedMonthProvider).year, 
-      ref.read(selectedMonthProvider).month, 
-      1
-    );
+    _forceUpdate();
     
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('予定を実績に移動しました')),
     );
   }
 
-  // 予定リストからアイテムを削除するメソッド（固定項目テンプレートも削除）
+  // 予定削除メソッド（完全削除版）
   void _deleteScheduledItem(Transaction scheduledItem, TransactionService transactionService) async {
-    // スケジュール項目のIDから元の固定項目のIDを取得
-    // scheduledItemのIDは "${originalId}_scheduled_${year}_${month}" の形式
-    final originalId = scheduledItem.id.split('_scheduled_').first;
+    print('=== 予定削除デバッグ ===');
+    print('削除対象のID: ${scheduledItem.id}');
     
-    // 元の固定項目テンプレートを削除
-    await transactionService.deleteTransaction(originalId);
+    // スケジュール項目のIDから元の固定項目のIDを取得
+    String originalId;
+    if (scheduledItem.id.contains('_scheduled_')) {
+      originalId = scheduledItem.id.split('_scheduled_')[0];
+    } else if (scheduledItem.id.contains('_preview_')) {
+      originalId = scheduledItem.id.split('_preview_')[0];
+    } else {
+      originalId = scheduledItem.id;
+    }
+    
+    print('削除する固定項目のID: $originalId');
+    
+    // 新しいdeleteFixedItemCompletelyメソッドを使用
+    await transactionService.deleteFixedItemCompletely(originalId);
     
     // UI更新
-    ref.read(selectedMonthProvider.notifier).state = DateTime(
-      ref.read(selectedMonthProvider).year, 
-      ref.read(selectedMonthProvider).month, 
-      1
-    );
+    _forceUpdate();
     
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('予定と固定項目を削除しました'),
+        content: Text('予定と固定項目を完全に削除しました'),
         backgroundColor: Colors.orange,
       ),
     );
@@ -190,8 +205,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
       itemBuilder: (ctx, index) {
         final transaction = transactions[index];
         return Dismissible(
-          key: ValueKey(transaction.id), // Dismissible に一意なキーを設定
-          direction: DismissDirection.endToStart, // 右から左へのスワイプを許可
+          key: ValueKey(transaction.id),
+          direction: DismissDirection.endToStart,
           background: Container(
             color: Colors.red,
             alignment: Alignment.centerRight,
@@ -205,8 +220,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
           onDismissed: (direction) async {
             if (direction == DismissDirection.endToStart) {
               await transactionService.deleteTransaction(transaction.id);
-              // 削除後、選択中の月を再設定することで UI を最新の状態に更新
-              ref.read(selectedMonthProvider.notifier).state = DateTime(ref.read(selectedMonthProvider).year, ref.read(selectedMonthProvider).month, 1);
+              _forceUpdate();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('取引を削除しました')),
               );
@@ -247,15 +261,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                 ),
               ),
               onTap: () async {
-                await Navigator.push(
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        AddTransactionScreen(editingTransaction: transaction),
+                    builder: (context) => AddTransactionScreen(editingTransaction: transaction),
                   ),
                 );
-                // 編集後、選択中の月を再設定することで UI を最新の状態に更新
-                ref.read(selectedMonthProvider.notifier).state = DateTime(ref.read(selectedMonthProvider).year, ref.read(selectedMonthProvider).month, 1);
+                _forceUpdate();
               },
             ),
           ),
@@ -287,8 +299,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
       TransactionService transactionService,
       BuildContext context) {
     return Dismissible(
-      key: Key(scheduledItem.id), // Dismissible に一意なキーを設定
-      direction: DismissDirection.horizontal, // 左右どちらへのスワイプも許可
+      key: Key(scheduledItem.id),
+      direction: DismissDirection.horizontal,
       background: Container(
         color: Colors.green,
         alignment: Alignment.centerLeft,
@@ -310,7 +322,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
           return await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('予定を削除'),
+              title: const Text('予定を完全削除'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,19 +332,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
+                      color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.shade200),
+                      border: Border.all(color: Colors.red.shade200),
                     ),
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '⚠️ 注意',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          '⚠️ 完全削除の影響',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
                         ),
                         SizedBox(height: 4),
-                        Text('• 固定項目の場合、将来の全ての予定も削除されます'),
+                        Text('• この固定項目が完全に削除されます'),
+                        Text('• 現在月および将来のすべての月の予定が削除されます'),
                         Text('• 既存の実績は削除されません'),
                         Text('• この操作は取り消せません'),
                       ],
@@ -350,7 +363,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.red,
                   ),
-                  child: const Text('削除'),
+                  child: const Text('完全削除'),
                 ),
               ],
             ),
@@ -369,14 +382,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
         elevation: 1,
         color: Theme.of(context).brightness == Brightness.dark
             ? Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3)
-            : Colors.orange.shade50, // 予定の色
+            : Colors.orange.shade50,
         child: ListTile(
           leading: CircleAvatar(
             backgroundColor: Theme.of(context).brightness == Brightness.dark
                 ? Colors.orange.shade800
                 : Colors.orange.shade100,
             child: Icon(
-              Icons.schedule, // 予定を表すアイコン
+              Icons.schedule,
               color: Theme.of(context).brightness == Brightness.dark
                   ? Colors.orange.shade300
                   : Colors.orange.shade700,
@@ -399,7 +412,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                   fontSize: 12,
                 ),
               ),
-              if (scheduledItem.memo?.isNotEmpty == true) // メモがあれば表示
+              if (scheduledItem.memo?.isNotEmpty == true)
                 Text(
                   scheduledItem.memo!,
                   style: TextStyle(
@@ -410,7 +423,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               Row(
                 children: [
                   Icon(
-                    Icons.repeat, // 固定項目を表すアイコン
+                    Icons.repeat,
                     size: 12,
                     color: Theme.of(context).brightness == Brightness.dark
                         ? Colors.orange.shade300
@@ -430,7 +443,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                   if (scheduledItem.holidayHandling != HolidayHandling.none) ...[
                     const SizedBox(width: 8),
                     Icon(
-                      Icons.event_busy, // 休日処理を表すアイコン
+                      Icons.event_busy,
                       size: 12,
                       color: Theme.of(context).brightness == Brightness.dark
                           ? Colors.blue.shade300
@@ -438,7 +451,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      scheduledItem.holidayHandling.displayName, // 休日処理の表示名
+                      scheduledItem.holidayHandling.displayName,
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).brightness == Brightness.dark
@@ -447,6 +460,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                       ),
                     ),
                   ],
+                  // 金額設定の表示
+                  const SizedBox(width: 8),
+                  Icon(
+                    scheduledItem.showAmountInSchedule ? Icons.attach_money : Icons.edit,
+                    size: 12,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.purple.shade300
+                        : Colors.purple.shade600,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    scheduledItem.showAmountInSchedule ? '金額固定' : '金額入力',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.purple.shade300
+                          : Colors.purple.shade600,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -465,16 +497,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                       ? Colors.red.shade300
                       : Colors.red.shade700),
             ),
-          ) : null,
+          ) : Text(
+            scheduledItem.type == TransactionType.income ? '収入' : '支出',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
           onTap: () async {
+            // 元の固定項目を編集するために、IDを取得
+            String originalId;
+            if (scheduledItem.id.contains('_scheduled_')) {
+              originalId = scheduledItem.id.split('_scheduled_')[0];
+            } else if (scheduledItem.id.contains('_preview_')) {
+              originalId = scheduledItem.id.split('_preview_')[0];
+            } else {
+              originalId = scheduledItem.id;
+            }
+            
+            // 元の固定項目を取得
+            final transactions = ref.read(transactionServiceProvider);
+            final originalTransaction = transactions.firstWhere(
+              (t) => t.id == originalId,
+              orElse: () => scheduledItem,
+            );
+            
             await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => AddTransactionScreen(editingTransaction: scheduledItem),
+                builder: (context) => AddTransactionScreen(editingTransaction: originalTransaction),
               ),
             );
-            // 編集後、UI を更新
-            ref.read(selectedMonthProvider.notifier).state = DateTime(ref.read(selectedMonthProvider).year, ref.read(selectedMonthProvider).month, 1);
+            _forceUpdate();
           },
         ),
       ),
@@ -483,15 +537,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    // selectedMonthProvider を watch して、月の変更を検知
     final selectedMonth = ref.watch(selectedMonthProvider);
-    // transactionServiceProvider の変更を watch して、データ更新を検知
     final transactionService = ref.watch(transactionServiceProvider.notifier);
 
-    // 月次サマリーは実績のみを含むように TransactionService 側でフィルタリングされます
     final summary = transactionService.getMonthlySummary(selectedMonth);
-    
-    // スケジュールアイテムは予定のみを含むように TransactionService 側で取得されます
     final scheduledItems = transactionService.getScheduledItemsForMonth(selectedMonth);
 
     return Scaffold(
@@ -524,17 +573,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               children: [
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: () => _changeMonth(-1, ref), // ref を渡す
+                  onPressed: () => _changeMonth(-1, ref),
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => _showMonthYearPicker(context, ref), // ref を渡す
+                    onTap: () => _showMonthYearPicker(context, ref),
                     onHorizontalDragEnd: (details) {
                       if (details.primaryVelocity! > 0) {
-                        _changeMonth(-1, ref); // 右スワイプで前月
+                        _changeMonth(-1, ref);
                       } else if (details.primaryVelocity! < 0) {
-                        _changeMonth(1, ref); // 左スワイプで翌月
+                        _changeMonth(1, ref);
                       }
                     },
                     child: Container(
@@ -553,7 +602,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
-                  onPressed: () => _changeMonth(1, ref), // ref を渡す
+                  onPressed: () => _changeMonth(1, ref),
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ],
@@ -689,9 +738,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // 実績タブの内容
                       _buildTransactionsList(summary.transactions, transactionService, context),
-                      // 予定タブの内容
                       _buildScheduledList(scheduledItems, transactionService, context),
                     ],
                   ),
@@ -703,40 +750,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // AddTransactionScreen から戻ってくるのを待機
           await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const AddTransactionScreen(),
             ),
           );
-          // 画面が戻ってきたら、選択中の月を再設定して UI を強制的に更新
-          // これにより、追加・編集されたデータがリストに反映されます。
-          ref.read(selectedMonthProvider.notifier).state = DateTime(selectedMonth.year, selectedMonth.month, 1);
+          _forceUpdate();
         },
         child: const Icon(Icons.add),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0, // 現在の画面がホームなので0
-        type: BottomNavigationBarType.fixed, // アイテム数が多い場合でもラベルが表示されるように
+        currentIndex: 0,
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'ホーム'),
           BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'サマリー'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: '設定'),
         ],
         onTap: (index) {
-          if (index == 1) { // サマリータブをタップした場合
+          if (index == 1) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SummaryScreen()),
             );
-          } else if (index == 2) { // 設定タブをタップした場合
+          } else if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SettingsScreen()),
             );
           }
-          // ホームタブ (index == 0) は現在の画面なので何もしません
         },
       ),
     );

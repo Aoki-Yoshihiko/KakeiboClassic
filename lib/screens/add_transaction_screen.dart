@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../models/holiday_handling.dart';
 import '../services/transaction_service.dart';
-import '../widgets/amount_input_dialog.dart'; // ★この行を追加★
+import '../widgets/amount_input_dialog.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
   final Transaction? editingTransaction;
@@ -258,7 +258,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       
                       const SizedBox(height: 16),
                       
-                      // 金額表示設定
+                      // 金額設定方法
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: Theme.of(context).dividerColor),
@@ -268,13 +268,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('予定での金額表示', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text('金額の設定方法', style: TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
                                   child: Text(
-                                    '予定タブで金額を表示する',
+                                    'デフォルト金額を使用する',
                                     style: TextStyle(
                                       color: Theme.of(context).textTheme.bodyMedium?.color,
                                     ),
@@ -301,7 +301,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                             borderRadius: BorderRadius.circular(20),
                                           ),
                                           child: Text(
-                                            'OFF',
+                                            '毎回入力',
                                             style: TextStyle(
                                               color: !_showAmountInSchedule 
                                                   ? Theme.of(context).colorScheme.primary
@@ -322,7 +322,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                             borderRadius: BorderRadius.circular(20),
                                           ),
                                           child: Text(
-                                            'ON',
+                                            '固定金額',
                                             style: TextStyle(
                                               color: _showAmountInSchedule 
                                                   ? Theme.of(context).colorScheme.primary
@@ -336,6 +336,41 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '💡 設定について',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '• 毎回入力：項目は固定、金額は実績確定時に毎回入力',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  Text(
+                                    '• 固定金額：上記で設定した金額をそのまま使用',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -439,16 +474,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             child: const Text('キャンセル'),
           ),
           TextButton(
-            onPressed: () async { // ★async を追加★
+            onPressed: () async {
               Navigator.pop(context); // 最初の確認ダイアログを閉じる
 
               double finalAmount = currentTransactionAmount;
 
-              // ★ここから金額入力ロジックの追加★
-              if (finalAmount == 0.0) {
+              // showAmountInSchedule が false の場合（毎回入力設定）に金額入力ダイアログを表示
+              if (!_showAmountInSchedule) {
                 final double? inputAmount = await showAmountInputDialog(
                   context,
-                  initialAmount: 0.0, // 現在0円なので0を初期値として渡す
+                  initialAmount: currentTransactionAmount,
                 );
 
                 if (inputAmount == null) {
@@ -458,15 +493,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   );
                   return; // 処理を中断
                 }
-                finalAmount = inputAmount; // ユーザーが入力した金額（0円も含む）を反映
+                finalAmount = inputAmount; // ユーザーが入力した金額を反映
               }
-              // ★金額入力ロジックここまで★
               
               // 実績としての新しいTransactionオブジェクトを作成
               final actualTransaction = Transaction()
                 ..id = DateTime.now().millisecondsSinceEpoch.toString()
                 ..title = _titleController.text
-                ..amount = finalAmount // ★ここ: 最終的に確定した金額を使用★
+                ..amount = finalAmount // 確定した金額を使用
                 ..date = _selectedDate
                 ..type = _selectedType
                 ..isFixedItem = false // 実績なのでfalse
