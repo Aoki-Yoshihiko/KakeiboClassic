@@ -1,5 +1,5 @@
 import 'package:hive/hive.dart';
-import 'transaction.dart';  // TransactionTypeを使用するため
+
 
 part 'item_template.g.dart';
 

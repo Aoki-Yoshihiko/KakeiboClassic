@@ -14,26 +14,17 @@ class SummaryScreen extends ConsumerStatefulWidget {
 class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
   DateTime _endDate = DateTime.now();
-  String? _selectedItem;
+  String? _selectedCategory;
 
   @override
   Widget build(BuildContext context) {
     final transactionService = ref.watch(transactionServiceProvider.notifier);
     final summary = transactionService.getPeriodSummary(_startDate, _endDate);
     
-    // 項目別集計
-    final Map<String, double> itemTotals = {};
-    final Map<String, List<Transaction>> itemTransactions = {};
-    
-    for (final transaction in summary.transactions) {
-      itemTotals[transaction.title] = (itemTotals[transaction.title] ?? 0) + transaction.amount;
-      itemTransactions[transaction.title] = (itemTransactions[transaction.title] ?? [])..add(transaction);
-    }
-    
-    // フィルタリング
-    final filteredTransactions = _selectedItem == null
+    // カテゴリでフィルタリング
+    final filteredTransactions = _selectedCategory == null
         ? summary.transactions
-        : summary.transactions.where((t) => t.title == _selectedItem).toList();
+        : summary.transactions.where((t) => t.category == _selectedCategory).toList();
 
     final filteredIncome = filteredTransactions
         .where((t) => t.type == TransactionType.income)
@@ -90,11 +81,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // 項目フィルター
+                  // カテゴリフィルター
                   DropdownButtonFormField<String?>(
-                    value: _selectedItem,
+                    value: _selectedCategory,
                     decoration: const InputDecoration(
-                      labelText: '項目フィルター',
+                      labelText: 'カテゴリフィルター',
                       border: OutlineInputBorder(),
                     ),
                     items: [
@@ -102,16 +93,16 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         value: null,
                         child: Text('すべて'),
                       ),
-                      ...itemTotals.keys.map((item) =>
+                      ...summary.categoryTotals.keys.map((category) =>
                           DropdownMenuItem<String?>(
-                            value: item,
-                            child: Text(item),
+                            value: category,
+                            child: Text(category),
                           ),
                       ),
                     ],
                     onChanged: (value) {
                       setState(() {
-                        _selectedItem = value;
+                        _selectedCategory = value;
                       });
                     },
                   ),
@@ -144,8 +135,8 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
 
           const SizedBox(height: 16),
 
-          // 項目別集計（選択されていない場合のみ）
-          if (_selectedItem == null)
+          // カテゴリ別集計（選択されていない場合のみ）
+          if (_selectedCategory == null)
             Expanded(
               child: Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -154,22 +145,24 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                     const Padding(
                       padding: EdgeInsets.all(16),
                       child: Text(
-                        '項目別集計',
+                        'カテゴリ別集計',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ),
                     Expanded(
                       child: ListView.builder(
-                        itemCount: itemTotals.length,
+                        itemCount: summary.categoryTotals.length,
                         itemBuilder: (context, index) {
-                          final entry = itemTotals.entries.elementAt(index);
-                          final transactions = itemTransactions[entry.key]!;
+                          final entry = summary.categoryTotals.entries.elementAt(index);
+                          final transactions = summary.transactions
+                              .where((t) => t.category == entry.key)
+                              .toList();
                           final isIncome = transactions.isNotEmpty && 
                               transactions.first.type == TransactionType.income;
                           
                           return ListTile(
                             title: Text(entry.key),
-                            subtitle: Text('${transactions.length}回'),
+                            subtitle: Text('${transactions.length}件'),
                             trailing: Text(
                               '${NumberFormat('#,###').format(entry.value.round())}円',
                               style: TextStyle(
@@ -179,7 +172,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                             ),
                             onTap: () {
                               setState(() {
-                                _selectedItem = entry.key;
+                                _selectedCategory = entry.key;
                               });
                             },
                           );
@@ -191,7 +184,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
               ),
             )
           else
-            // 選択項目の取引一覧
+            // 選択カテゴリの取引一覧
             Expanded(
               child: Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -202,14 +195,14 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                       child: Row(
                         children: [
                           Text(
-                            '$_selectedItem の履歴',
+                            '$_selectedCategory の取引',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           const Spacer(),
                           TextButton(
                             onPressed: () {
                               setState(() {
-                                _selectedItem = null;
+                                _selectedCategory = null;
                               });
                             },
                             child: const Text('クリア'),
