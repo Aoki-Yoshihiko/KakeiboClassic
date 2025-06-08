@@ -65,7 +65,7 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       ..write(obj.fixedDay)
       ..writeByte(12)
       ..write(obj.holidayHandling)
-      ..writeByte(14)
+      ..writeByte(13)
       ..write(obj.category);
   }
 
@@ -82,7 +82,7 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
 
 class TransactionTypeAdapter extends TypeAdapter<TransactionType> {
   @override
-  final int typeId = 4;
+  final int typeId = 1;
 
   @override
   TransactionType read(BinaryReader reader) {

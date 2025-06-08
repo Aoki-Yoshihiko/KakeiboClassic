@@ -1,5 +1,5 @@
 import 'package:hive/hive.dart';
-import 'transaction.dart'; // TransactionTypeをインポート
+import 'transaction.dart';
 
 part 'item_template.g.dart';
 
@@ -23,17 +23,30 @@ class ItemTemplate extends HiveObject {
   @HiveField(5)
   late DateTime createdAt;
 
+  @HiveField(6)
+  String? category;
+
+  @HiveField(7)
+  late DateTime updatedAt;
+
   ItemTemplate({
     required this.id,
     required this.title,
     required this.defaultAmount,
     required this.type,
     this.memo,
+    this.category,
     required this.createdAt,
-  });
+    DateTime? updatedAt,
+  }) : updatedAt = updatedAt ?? DateTime.now();
 
-  // デフォルトコンストラクタ（Hive用）
-  ItemTemplate.empty();
+  ItemTemplate.empty() {
+    updatedAt = DateTime.now();
+  }
+
+  // 互換性のためのゲッター/セッター
+  double get amount => defaultAmount;
+  set amount(double value) => defaultAmount = value;
 
   ItemTemplate copyWith({
     String? id,
@@ -41,7 +54,9 @@ class ItemTemplate extends HiveObject {
     double? defaultAmount,
     TransactionType? type,
     String? memo,
+    String? category,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     final newTemplate = ItemTemplate.empty();
     newTemplate.id = id ?? this.id;
@@ -49,7 +64,9 @@ class ItemTemplate extends HiveObject {
     newTemplate.defaultAmount = defaultAmount ?? this.defaultAmount;
     newTemplate.type = type ?? this.type;
     newTemplate.memo = memo ?? this.memo;
+    newTemplate.category = category ?? this.category;
     newTemplate.createdAt = createdAt ?? this.createdAt;
+    newTemplate.updatedAt = updatedAt ?? this.updatedAt;
     return newTemplate;
   }
 
@@ -60,7 +77,9 @@ class ItemTemplate extends HiveObject {
       'defaultAmount': defaultAmount,
       'type': type.index,
       'memo': memo,
+      'category': category,
       'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -71,7 +90,9 @@ class ItemTemplate extends HiveObject {
     template.defaultAmount = json['defaultAmount'].toDouble();
     template.type = TransactionType.values[json['type']];
     template.memo = json['memo'];
+    template.category = json['category'];
     template.createdAt = DateTime.parse(json['createdAt']);
+    template.updatedAt = DateTime.parse(json['updatedAt'] ?? json['createdAt']);
     return template;
   }
 }

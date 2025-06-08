@@ -17,8 +17,7 @@ class TemplateService extends StateNotifier<List<ItemTemplate>> {
   Future<void> loadTemplates() async {
     try {
       final templates = globalDatabaseService.itemTemplateBox.values.toList();
-      // 更新日時でソート（新しい順）
-      templates.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      templates.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       state = templates;
     } catch (e) {
       print('テンプレート読み込みエラー: $e');
@@ -29,7 +28,7 @@ class TemplateService extends StateNotifier<List<ItemTemplate>> {
   Future<void> addTemplate(ItemTemplate template) async {
     try {
       await globalDatabaseService.itemTemplateBox.put(template.id, template);
-      await loadTemplates(); // 再読み込みでソート
+      await loadTemplates();
     } catch (e) {
       print('テンプレート追加エラー: $e');
       rethrow;
@@ -39,7 +38,7 @@ class TemplateService extends StateNotifier<List<ItemTemplate>> {
   Future<void> updateTemplate(ItemTemplate template) async {
     try {
       await globalDatabaseService.itemTemplateBox.put(template.id, template);
-      await loadTemplates(); // 再読み込みでソート
+      await loadTemplates();
     } catch (e) {
       print('テンプレート更新エラー: $e');
       rethrow;
@@ -56,12 +55,11 @@ class TemplateService extends StateNotifier<List<ItemTemplate>> {
     }
   }
 
-  // テンプレートからトランザクションを作成
   Transaction createTransactionFromTemplate(ItemTemplate template) {
     return Transaction()
       ..id = DateTime.now().millisecondsSinceEpoch.toString()
       ..title = template.title
-      ..amount = template.amount
+      ..amount = template.defaultAmount
       ..date = DateTime.now()
       ..type = template.type
       ..isFixedItem = false
@@ -74,33 +72,4 @@ class TemplateService extends StateNotifier<List<ItemTemplate>> {
       ..holidayHandling = HolidayHandling.none
       ..category = template.category;
   }
-
-  // よく使う取引からテンプレートを作成する機能
-  Future<void> createTemplateFromTransaction(Transaction transaction, String templateName) async {
-    final template = ItemTemplate()
-      ..id = DateTime.now().millisecondsSinceEpoch.toString()
-      ..title = templateName.isEmpty ? transaction.title : templateName
-      ..amount = transaction.amount
-      ..type = transaction.type
-      ..memo = transaction.memo
-      ..category = transaction.category
-      ..createdAt = DateTime.now()
-      ..updatedAt = DateTime.now();
-
-    await addTemplate(template);
-  }
-
-  // カテゴリ別テンプレート取得
-  List<ItemTemplate> getTemplatesByCategory(String? category) {
-    if (category == null) return state;
-    return state.where((t) => t.category == category).toList();
-  }
-
-  // 収入テンプレート
-  List<ItemTemplate> get incomeTemplates =>
-      state.where((t) => t.type == TransactionType.income).toList();
-
-  // 支出テンプレート
-  List<ItemTemplate> get expenseTemplates =>
-      state.where((t) => t.type == TransactionType.expense).toList();
 }

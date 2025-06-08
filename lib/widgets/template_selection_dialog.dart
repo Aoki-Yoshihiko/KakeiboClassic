@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/item_template.dart';
 import '../models/transaction.dart';
-import '../services/template_service.dart';
+import '../services/item_template_service.dart';
 import '../screens/add_transaction_screen.dart';
+import '../screens/template_edit_screen.dart';
 import '../constants/category_constants.dart';
+import '../models/holiday_handling.dart';
 
 class TemplateSelectionDialog extends ConsumerStatefulWidget {
   const TemplateSelectionDialog({super.key});
@@ -32,7 +34,7 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
 
   @override
   Widget build(BuildContext context) {
-    final templates = ref.watch(templateServiceProvider);
+    final templates = ref.watch(itemTemplateServiceProvider);
     final incomeTemplates = templates.where((t) => t.type == TransactionType.income).toList();
     final expenseTemplates = templates.where((t) => t.type == TransactionType.expense).toList();
 
@@ -128,6 +130,7 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
 
   Widget _buildTemplateCard(ItemTemplate template) {
     final isIncome = template.type == TransactionType.income;
+    final category = _extractCategoryFromMemo(template.memo);
     
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -135,8 +138,12 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
         leading: CircleAvatar(
           backgroundColor: isIncome ? Colors.green.shade100 : Colors.red.shade100,
           child: Icon(
-            CategoryConstants.getCategoryIcon(template.category),
-            color: isIncome ? Colors.green : Colors.red,
+            category != null 
+                ? CategoryConstants.getCategoryIcon(category)
+                : (isIncome ? Icons.add_circle : Icons.remove_circle),
+            color: category != null
+                ? CategoryConstants.getCategoryColor(category, context)
+                : (isIncome ? Colors.green : Colors.red),
             size: 20,
           ),
         ),
@@ -148,15 +155,15 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${isIncome ? '+' : '-'}${NumberFormat('#,###').format(template.amount)}円',
+              '${isIncome ? '+' : '-'}${NumberFormat('#,###').format(template.defaultAmount.round())}円',
               style: TextStyle(
                 color: isIncome ? Colors.green : Colors.red,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (template.category != null) 
+            if (category != null) 
               Text(
-                template.category!,
+                category,
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
             if (template.memo != null && template.memo!.isNotEmpty)
@@ -207,59 +214,75 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
     );
   }
 
+  // メモからカテゴリを推測する関数
+  String? _extractCategoryFromMemo(String? memo) {
+    if (memo == null) return null;
+    
+    final allCategories = [...CategoryConstants.incomeCategories, ...CategoryConstants.expenseCategories];
+    
+    for (final category in allCategories) {
+      if (memo.contains(category)) {
+        return category;
+      }
+    }
+    
+    return null;
+  }
+
   void _useTemplate(ItemTemplate template) async {
     // テンプレートからトランザクションを作成
-    final transaction = ref.read(templateServiceProvider.notifier).createTransactionFromTemplate(template);
+    final transaction = _createTransactionFromTemplate(template);
     
     // 編集画面で開く
     Navigator.pop(context); // ダイアログを閉じる
     
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(
-          initialType: template.type,
-          editingTransaction: transaction,
-        ),
+        builder: (context) => AddTransactionScreen(editingTransaction: transaction),
       ),
     );
+  }
 
-    // 結果に応じてメッセージ表示
-    if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('「${template.title}」を追加しました')),
-      );
-    }
+  // テンプレートからトランザクションを作成するヘルパーメソッド
+  Transaction _createTransactionFromTemplate(ItemTemplate template) {
+    final category = _extractCategoryFromMemo(template.memo);
+    
+    final transaction = Transaction();
+    transaction.id = DateTime.now().millisecondsSinceEpoch.toString();
+    transaction.title = template.title;
+    transaction.amount = template.defaultAmount;
+    transaction.date = DateTime.now();
+    transaction.type = template.type;
+    transaction.isFixedItem = false;
+    transaction.fixedMonths = [];
+    transaction.fixedDay = 1;
+    transaction.holidayHandling = HolidayHandling.none;
+    transaction.showAmountInSchedule = false;
+    transaction.memo = template.memo;
+    transaction.category = category;
+    transaction.createdAt = DateTime.now();
+    transaction.updatedAt = DateTime.now();
+    
+    return transaction;
   }
 
   void _showAddTemplateDialog(BuildContext context) async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const AddTemplateScreen(),
+        builder: (context) => const TemplateEditScreen(),
       ),
     );
-    
-    if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('テンプレートを追加しました')),
-      );
-    }
   }
 
   void _showEditTemplateDialog(ItemTemplate template) async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddTemplateScreen(editingTemplate: template),
+        builder: (context) => TemplateEditScreen(template: template),
       ),
     );
-    
-    if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('テンプレートを更新しました')),
-      );
-    }
   }
 
   void _confirmDeleteTemplate(ItemTemplate template) {
@@ -276,7 +299,7 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
           TextButton(
             onPressed: () async {
               try {
-                await ref.read(templateServiceProvider.notifier).deleteTemplate(template.id);
+                await ref.read(itemTemplateServiceProvider.notifier).deleteTemplate(template.id);
                 Navigator.pop(context);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -297,232 +320,5 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
         ],
       ),
     );
-  }
-}
-
-// テンプレート追加・編集画面
-class AddTemplateScreen extends ConsumerStatefulWidget {
-  final ItemTemplate? editingTemplate;
-
-  const AddTemplateScreen({super.key, this.editingTemplate});
-
-  @override
-  ConsumerState<AddTemplateScreen> createState() => _AddTemplateScreenState();
-}
-
-class _AddTemplateScreenState extends ConsumerState<AddTemplateScreen> {
-  final _titleController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _memoController = TextEditingController();
-  
-  TransactionType _type = TransactionType.expense;
-  String? _category;
-
-  @override
-  void initState() {
-    super.initState();
-    
-    if (widget.editingTemplate != null) {
-      final template = widget.editingTemplate!;
-      _titleController.text = template.title;
-      _amountController.text = template.amount.toString();
-      _memoController.text = template.memo ?? '';
-      _type = template.type;
-      _category = template.category;
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _amountController.dispose();
-    _memoController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isEditing = widget.editingTemplate != null;
-    
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isEditing ? 'テンプレート編集' : 'テンプレート追加'),
-        actions: [
-          TextButton(
-            onPressed: _saveTemplate,
-            child: const Text('保存', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // タイトル
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: 'タイトル *',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.title),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 金額
-            TextField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '金額 *',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.currency_yen),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 収入/支出選択
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('種類', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    SegmentedButton<TransactionType>(
-                      segments: const [
-                        ButtonSegment(
-                          value: TransactionType.income,
-                          label: Text('収入'),
-                          icon: Icon(Icons.add_circle, color: Colors.green),
-                        ),
-                        ButtonSegment(
-                          value: TransactionType.expense,
-                          label: Text('支出'),
-                          icon: Icon(Icons.remove_circle, color: Colors.red),
-                        ),
-                      ],
-                      selected: {_type},
-                      onSelectionChanged: (set) {
-                        setState(() {
-                          _type = set.first;
-                          _category = null; // タイプ変更時はカテゴリリセット
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // カテゴリ選択
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(
-                labelText: 'カテゴリ',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.category),
-              ),
-              items: CategoryConstants.getCategoriesForType(_type)
-                  .map((category) => DropdownMenuItem(
-                        value: category,
-                        child: Row(
-                          children: [
-                            Icon(
-                              CategoryConstants.getCategoryIcon(category),
-                              size: 20,
-                              color: CategoryConstants.getCategoryColor(category, context),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(category),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-              onChanged: (value) => setState(() => _category = value),
-            ),
-            const SizedBox(height: 16),
-
-            // メモ
-            TextField(
-              controller: _memoController,
-              decoration: const InputDecoration(
-                labelText: 'メモ（任意）',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.note),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 24),
-
-            // 保存ボタン（大きめ）
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _saveTemplate,
-                icon: const Icon(Icons.save),
-                label: Text(isEditing ? 'テンプレートを更新' : 'テンプレートを追加'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _saveTemplate() async {
-    if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('タイトルを入力してください')),
-      );
-      return;
-    }
-
-    if (_amountController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('金額を入力してください')),
-      );
-      return;
-    }
-
-    final amount = double.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('正しい金額を入力してください')),
-      );
-      return;
-    }
-
-    try {
-      final template = ItemTemplate()
-        ..id = widget.editingTemplate?.id ?? DateTime.now().millisecondsSinceEpoch.toString()
-        ..title = _titleController.text.trim()
-        ..amount = amount
-        ..type = _type
-        ..memo = _memoController.text.trim().isEmpty ? null : _memoController.text.trim()
-        ..category = _category
-        ..createdAt = widget.editingTemplate?.createdAt ?? DateTime.now()
-        ..updatedAt = DateTime.now();
-
-      if (widget.editingTemplate != null) {
-        await ref.read(templateServiceProvider.notifier).updateTemplate(template);
-      } else {
-        await ref.read(templateServiceProvider.notifier).addTemplate(template);
-      }
-
-      Navigator.pop(context, true); // 成功を示すtrueを返す
-      
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存に失敗しました: $e')),
-      );
-    }
   }
 }

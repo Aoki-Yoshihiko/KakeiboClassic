@@ -22,14 +22,16 @@ class ItemTemplateAdapter extends TypeAdapter<ItemTemplate> {
       defaultAmount: fields[2] as double,
       type: fields[3] as TransactionType,
       memo: fields[4] as String?,
+      category: fields[6] as String?,
       createdAt: fields[5] as DateTime,
+      updatedAt: fields[7] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ItemTemplate obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +43,11 @@ class ItemTemplateAdapter extends TypeAdapter<ItemTemplate> {
       ..writeByte(4)
       ..write(obj.memo)
       ..writeByte(5)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(6)
+      ..write(obj.category)
+      ..writeByte(7)
+      ..write(obj.updatedAt);
   }
 
   @override

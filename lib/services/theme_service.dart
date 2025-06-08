@@ -1,3 +1,5 @@
+// lib/services/theme_service.dart を以下のように修正
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -32,6 +34,12 @@ class ThemeService extends StateNotifier<ThemeMode> {
   Future<void> setTheme(ThemeMode themeMode) async {
     state = themeMode;
     await _themeBox.put('theme_mode', themeMode.name);
+  }
+
+  // toggleThemeメソッドを追加
+  Future<void> toggleTheme() async {
+    final newTheme = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    await setTheme(newTheme);
   }
 
   static ThemeData get lightTheme {
