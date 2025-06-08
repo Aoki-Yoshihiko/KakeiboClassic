@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../models/holiday_handling.dart';
 import '../services/transaction_service.dart';
+import '../constants/category_constants.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
   final Transaction? editingTransaction;
@@ -30,16 +31,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   bool _showAmountInSchedule = true;
   String? _selectedCategory;
 
-  // カテゴリの定数を定義
-  static const List<String> incomeCategories = [
-    '給与', '賞与', '副業', '投資', '年金', 'その他収入'
-  ];
-  
-  static const List<String> expenseCategories = [
-    '食費', '住居', '光熱費', '通信費', '交通費', '医療', '保険', 
-    '教育', '娯楽', '被服', '美容', '交際費', 'その他支出'
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -59,6 +50,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _fixedDay = transaction.fixedDay;
     _holidayHandling = transaction.holidayHandling;
     _showAmountInSchedule = transaction.showAmountInSchedule;
+    _selectedCategory = transaction.category;
     
     // メモからカテゴリを抽出
     _extractCategoryFromMemo();
@@ -67,8 +59,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   void _extractCategoryFromMemo() {
     final memo = _memoController.text;
     final categories = _selectedType == TransactionType.income 
-        ? incomeCategories 
-        : expenseCategories;
+        ? CategoryConstants.incomeCategories 
+        : CategoryConstants.expenseCategories;
     
     for (final category in categories) {
       if (memo.contains(category)) {
@@ -175,8 +167,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: (_selectedType == TransactionType.income 
-                          ? incomeCategories 
-                          : expenseCategories)
+                          ? CategoryConstants.incomeCategories 
+                          : CategoryConstants.expenseCategories)
                           .map((category) => DropdownMenuItem(
                                 value: category,
                                 child: Text(category),
@@ -504,6 +496,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     transaction.fixedDay = _fixedDay;
     transaction.holidayHandling = _holidayHandling;
     transaction.showAmountInSchedule = _showAmountInSchedule;
+    transaction.category = _selectedCategory;
     
     // メモにカテゴリを含める
     String finalMemo = _memoController.text;
@@ -581,6 +574,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ..holidayHandling = HolidayHandling.none
                 ..showAmountInSchedule = false
                 ..memo = finalMemo
+                ..category = _selectedCategory
                 ..createdAt = DateTime.now()
                 ..updatedAt = DateTime.now();
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/item_template.dart';
+import '../models/transaction.dart';
 import '../services/item_template_service.dart';
 import '../constants/category_constants.dart';
 import 'template_edit_screen.dart';

@@ -1,13 +1,7 @@
 import 'package:hive/hive.dart';
-
+import 'transaction.dart'; // TransactionTypeをインポート
 
 part 'item_template.g.dart';
-
-// TransactionTypeの定義をここに追加（重複を避けるため）
-enum TransactionType {
-  income,
-  expense,
-}
 
 @HiveType(typeId: 3)
 class ItemTemplate extends HiveObject {

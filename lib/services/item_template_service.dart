@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/item_template.dart';
-// import '../models/transaction.dart';  // TransactionType用
+import '../models/transaction.dart';  // TransactionType用
 import 'database_service.dart';
 import 'transaction_service.dart';  // databaseServiceProviderのインポートを追加
 
@@ -79,13 +79,13 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
   // デフォルトテンプレートを作成
   Future<void> createDefaultTemplates() async {
     final defaultTemplates = [
-      // 【あなたの最初のリクエスト分】コンビニなど
+      // よく使う支出項目
       ItemTemplate(
         id: 'template_convenience',
         title: 'コンビニ',
         defaultAmount: 500,
         type: TransactionType.expense,
-        memo: '日用品',
+        memo: 'その他支出',
         createdAt: DateTime.now(),
       ),
       ItemTemplate(
@@ -133,7 +133,7 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
         title: 'ドラッグストア',
         defaultAmount: 2000,
         type: TransactionType.expense,
-        memo: '日用品',
+        memo: 'その他支出',
         createdAt: DateTime.now(),
       ),
       ItemTemplate(
@@ -145,13 +145,13 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
         createdAt: DateTime.now(),
       ),
 
-      // 【あなたの後から提示した】給料や光熱費など
+      // 固定的な収入・支出項目
       ItemTemplate(
         id: 'template_salary',
         title: '給料',
         defaultAmount: 250000,
         type: TransactionType.income,
-        memo: '毎月の給与',
+        memo: '給与',
         createdAt: DateTime.now(),
       ),
       ItemTemplate(
@@ -159,7 +159,7 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
         title: '家賃',
         defaultAmount: 80000,
         type: TransactionType.expense,
-        memo: '住居費',
+        memo: '住居',
         createdAt: DateTime.now(),
       ),
       ItemTemplate(
@@ -207,7 +207,7 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
         title: '食費',
         defaultAmount: 40000,
         type: TransactionType.expense,
-        memo: '生活費',
+        memo: '食費',
         createdAt: DateTime.now(),
       ),
     ];

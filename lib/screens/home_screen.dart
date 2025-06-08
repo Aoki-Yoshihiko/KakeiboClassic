@@ -1342,19 +1342,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               ),
             ),
           ),
-          FloatingActionButton(
-            heroTag: "add",
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddTransactionScreen(),
-                ),
-              );
-              _forceUpdate();
-            },
+          GestureDetector(
             onLongPress: () => _showTemplateSelection(context),
-            child: const Icon(Icons.add),
+            child: FloatingActionButton(
+              heroTag: "add",
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddTransactionScreen(),
+                  ),
+                );
+                _forceUpdate();
+              },
+              child: const Icon(Icons.add),
+            ),
           ),
         ],
       ),

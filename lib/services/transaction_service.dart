@@ -65,6 +65,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
             ..holidayHandling = HolidayHandling.none
             ..showAmountInSchedule = false
             ..memo = transaction.memo
+            ..category = transaction.category
             ..createdAt = DateTime.now()
             ..updatedAt = DateTime.now();
 
@@ -322,7 +323,14 @@ class TransactionService extends StateNotifier<List<Transaction>> {
   Map<String, double> _calculateCategoryTotals(List<Transaction> transactions) {
     final Map<String, double> categoryMap = {};
     for (var t in transactions) {
-      final category = t.category ?? (t.type == TransactionType.income ? '収入（その他）' : '支出（その他）');
+      // categoryフィールドを優先し、なければデフォルト値を使用
+      String category;
+      if (t.category != null && t.category!.isNotEmpty) {
+        category = t.category!;
+      } else {
+        category = t.type == TransactionType.income ? '収入（その他）' : '支出（その他）';
+      }
+      
       categoryMap.update(category, (value) => value + t.amount, ifAbsent: () => t.amount);
     }
     return categoryMap;
@@ -357,6 +365,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
           newTransaction.holidayHandling = HolidayHandling.none;
           newTransaction.showAmountInSchedule = false;
           newTransaction.memo = '${fixedItem.memo ?? ''} (固定項目から自動生成)';
+          newTransaction.category = fixedItem.category;
           newTransaction.createdAt = DateTime.now();
           newTransaction.updatedAt = DateTime.now();
 
@@ -382,6 +391,81 @@ class TransactionService extends StateNotifier<List<Transaction>> {
     return file.path;
   }
 
+  // CSVエクスポート（全データ）
+  Future<String> exportToCSV() async {
+    final transactions = state.where((t) => !t.isFixedItem).toList();
+    transactions.sort((a, b) => a.date.compareTo(b.date));
+    
+    return _exportTransactionsToCSV(transactions, 'all_data');
+  }
+
+  // CSVエクスポート（月指定）
+  Future<String> exportMonthToCSV(DateTime month) async {
+    final transactions = state.where((t) {
+      return t.date.year == month.year &&
+             t.date.month == month.month &&
+             !t.isFixedItem;
+    }).toList();
+    transactions.sort((a, b) => a.date.compareTo(b.date));
+    
+    final monthStr = '${month.year}${month.month.toString().padLeft(2, '0')}';
+    return _exportTransactionsToCSV(transactions, 'month_$monthStr');
+  }
+
+  // CSVエクスポート（期間指定）
+  Future<String> exportPeriodToCSV(DateTime startDate, DateTime endDate) async {
+    final transactions = state.where((t) {
+      return t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
+             t.date.isBefore(endDate.add(const Duration(days: 1))) &&
+             !t.isFixedItem;
+    }).toList();
+    transactions.sort((a, b) => a.date.compareTo(b.date));
+    
+    final startStr = '${startDate.year}${startDate.month.toString().padLeft(2, '0')}${startDate.day.toString().padLeft(2, '0')}';
+    final endStr = '${endDate.year}${endDate.month.toString().padLeft(2, '0')}${endDate.day.toString().padLeft(2, '0')}';
+    return _exportTransactionsToCSV(transactions, 'period_${startStr}_$endStr');
+  }
+
+  // CSVエクスポート共通処理
+  Future<String> _exportTransactionsToCSV(List<Transaction> transactions, String suffix) async {
+    final buffer = StringBuffer();
+    
+    // BOM付きUTF-8ヘッダー（Excelでの文字化け防止）
+    buffer.write('\uFEFF');
+    
+    // CSVヘッダー
+    buffer.writeln('日付,種類,項目名,金額,カテゴリ,メモ,固定項目');
+    
+    // データ行
+    for (final transaction in transactions) {
+      final dateStr = '${transaction.date.year}/${transaction.date.month.toString().padLeft(2, '0')}/${transaction.date.day.toString().padLeft(2, '0')}';
+      final typeStr = transaction.type == TransactionType.income ? '収入' : '支出';
+      final titleStr = _escapeCsv(transaction.title);
+      final amountStr = transaction.amount.round().toString();
+      final categoryStr = _escapeCsv(transaction.category ?? '');
+      final memoStr = _escapeCsv(transaction.memo ?? '');
+      final fixedStr = transaction.isFixedItem ? '固定' : '';
+      
+      buffer.writeln('$dateStr,$typeStr,$titleStr,$amountStr,$categoryStr,$memoStr,$fixedStr');
+    }
+    
+    // ファイル保存
+    final directory = await getApplicationDocumentsDirectory();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final file = File('${directory.path}/kurashikku_${suffix}_$timestamp.csv');
+    await file.writeAsString(buffer.toString());
+    
+    return file.path;
+  }
+
+  // CSV用文字列エスケープ
+  String _escapeCsv(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
   // データインポート
   Future<void> importData(String filePath) async {
     final file = File(filePath);
@@ -403,6 +487,130 @@ class TransactionService extends StateNotifier<List<Transaction>> {
 
       _loadTransactions();
     }
+  }
+
+  // CSVインポート
+  Future<int> importFromCSV(String filePath) async {
+    final file = File(filePath);
+    if (!await file.exists()) throw Exception('ファイルが見つかりません');
+
+    final content = await file.readAsString();
+    final lines = content.split('\n');
+    
+    if (lines.isEmpty) throw Exception('CSVファイルが空です');
+    
+    // ヘッダー行をスキップ
+    int importedCount = 0;
+    
+    for (int i = 1; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+      
+      try {
+        final fields = _parseCsvLine(line);
+        if (fields.length < 6) continue; // 最低限必要なフィールド数
+        
+        // CSV形式: 日付,種類,項目名,金額,カテゴリ,メモ,固定項目
+        final dateStr = fields[0];
+        final typeStr = fields[1];
+        final title = fields[2];
+        final amountStr = fields[3];
+        final category = fields.length > 4 ? fields[4] : null;
+        final memo = fields.length > 5 ? fields[5] : null;
+        final isFixedStr = fields.length > 6 ? fields[6] : '';
+        
+        // 日付パース
+        DateTime? date;
+        try {
+          final dateParts = dateStr.split('/');
+          if (dateParts.length == 3) {
+            date = DateTime(
+              int.parse(dateParts[0]),
+              int.parse(dateParts[1]),
+              int.parse(dateParts[2]),
+            );
+          }
+        } catch (e) {
+          continue; // 日付パースエラーの場合はスキップ
+        }
+        
+        if (date == null) continue;
+        
+        // 種類パース
+        TransactionType? type;
+        if (typeStr == '収入') {
+          type = TransactionType.income;
+        } else if (typeStr == '支出') {
+          type = TransactionType.expense;
+        }
+        
+        if (type == null) continue;
+        
+        // 金額パース
+        final amount = double.tryParse(amountStr);
+        if (amount == null) continue;
+        
+        // 取引作成
+        final transaction = Transaction()
+          ..id = 'csv_import_${DateTime.now().millisecondsSinceEpoch}_$i'
+          ..title = title
+          ..amount = amount
+          ..date = date
+          ..type = type
+          ..isFixedItem = isFixedStr == '固定'
+          ..fixedMonths = []
+          ..fixedDay = date.day
+          ..holidayHandling = HolidayHandling.none
+          ..showAmountInSchedule = false
+          ..memo = memo?.isEmpty == true ? null : memo
+          ..category = category?.isEmpty == true ? null : category
+          ..createdAt = DateTime.now()
+          ..updatedAt = DateTime.now();
+        
+        await _databaseService.transactionBox.put(transaction.id, transaction);
+        importedCount++;
+        
+      } catch (e) {
+        // エラーの場合はその行をスキップして続行
+        continue;
+      }
+    }
+    
+    _loadTransactions();
+    return importedCount;
+  }
+
+  // CSV行パース（簡易版）
+  List<String> _parseCsvLine(String line) {
+    final fields = <String>[];
+    bool inQuotes = false;
+    String currentField = '';
+    
+    for (int i = 0; i < line.length; i++) {
+      final char = line[i];
+      
+      if (char == '"') {
+        if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+          // エスケープされたクォート
+          currentField += '"';
+          i++; // 次の文字をスキップ
+        } else {
+          // クォートの開始/終了
+          inQuotes = !inQuotes;
+        }
+      } else if (char == ',' && !inQuotes) {
+        // フィールド区切り
+        fields.add(currentField);
+        currentField = '';
+      } else {
+        currentField += char;
+      }
+    }
+    
+    // 最後のフィールドを追加
+    fields.add(currentField);
+    
+    return fields;
   }
 
   // 全データクリア

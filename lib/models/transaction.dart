@@ -53,8 +53,8 @@ class Transaction extends HiveObject {
   @HiveField(12, defaultValue: HolidayHandling.none)
   late HolidayHandling holidayHandling;
 
-  @HiveField(13) // ★ここを追加★ 既存のフィールド番号の次の番号を使用してください
-  String? category; // ★ここを追加★
+  @HiveField(13) // カテゴリフィールド
+  String? category;
 
   Transaction();
 
@@ -72,6 +72,7 @@ class Transaction extends HiveObject {
     DateTime? updatedAt,
     int? fixedDay,
     HolidayHandling? holidayHandling,
+    String? category,
   }) {
     final newTransaction = Transaction();
     newTransaction.id = id ?? this.id;
@@ -87,6 +88,7 @@ class Transaction extends HiveObject {
     newTransaction.updatedAt = updatedAt ?? this.updatedAt;
     newTransaction.fixedDay = fixedDay ?? this.fixedDay;
     newTransaction.holidayHandling = holidayHandling ?? this.holidayHandling;
+    newTransaction.category = category ?? this.category;
     return newTransaction;
   }
 
@@ -148,6 +150,7 @@ class Transaction extends HiveObject {
       'updatedAt': updatedAt.toIso8601String(),
       'fixedDay': fixedDay,
       'holidayHandling': holidayHandling.index,
+      'category': category,
     };
   }
 
@@ -168,6 +171,7 @@ class Transaction extends HiveObject {
     transaction.holidayHandling = json['holidayHandling'] != null 
         ? HolidayHandling.values[json['holidayHandling']] 
         : HolidayHandling.none;
+    transaction.category = json['category'];
     return transaction;
   }
 }
