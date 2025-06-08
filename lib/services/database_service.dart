@@ -20,7 +20,7 @@ class DatabaseService {
     if (!Hive.isAdapterRegistered(1)) {
       Hive.registerAdapter(TransactionTypeAdapter());
     }
-        if (!Hive.isAdapterRegistered(2)) {  // 追加
+    if (!Hive.isAdapterRegistered(2)) {
       Hive.registerAdapter(HolidayHandlingAdapter());
     }
     if (!Hive.isAdapterRegistered(3)) {

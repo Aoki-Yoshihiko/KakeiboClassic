@@ -2,7 +2,6 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/transaction.dart';
@@ -193,10 +192,11 @@ class TransactionService extends StateNotifier<List<Transaction>> {
   List<Transaction> _getFixedItemsForMonth(DateTime targetMonth) {
     final fixedItems = <Transaction>[];
 
+    // 現在月より前の場合は固定項目を表示しない
     final now = DateTime.now();
     final currentMonth = DateTime(now.year, now.month);
     final target = DateTime(targetMonth.year, targetMonth.month);
-
+    
     if (target.isBefore(currentMonth)) {
       return fixedItems;
     }
@@ -228,34 +228,57 @@ class TransactionService extends StateNotifier<List<Transaction>> {
   List<Transaction> getScheduledItemsForMonth(DateTime month) {
     final scheduledItems = <Transaction>[];
 
+    // 現在月より前の場合は予定を表示しない（過去に予定はおかしいため）
     final now = DateTime.now();
     final currentMonth = DateTime(now.year, now.month);
     final targetMonth = DateTime(month.year, month.month);
+    
+    // 過去の月には予定を表示しない
+    if (targetMonth.isBefore(currentMonth)) {
+      return scheduledItems;
+    }
 
-    if (targetMonth.isAfter(currentMonth) || (targetMonth.year == currentMonth.year && targetMonth.month == currentMonth.month)) {
-      for (final transaction in state) {
-        if (transaction.isFixedItem && transaction.isFixedInMonth(month.month)) {
-          // 既に実績が存在するかチェック
-          final existingTransaction = state.any((t) =>
-            t.title == transaction.title &&
-            t.date.year == month.year &&
-            t.date.month == month.month &&
-            !t.isFixedItem &&
-            !t.id.contains('_scheduled_') &&
-            !t.id.contains('_fixed_actual') &&
-            !t.id.contains('_actual_')
+    for (final transaction in state) {
+      if (transaction.isFixedItem && transaction.isFixedInMonth(month.month)) {
+        // より厳密な重複チェック：
+        // 1. 同じ固定項目IDから生成された実績があるか
+        // 2. 同じタイトルで同じ月の実績があるか
+        final existingTransaction = state.any((t) {
+          // 固定項目ではない（実績である）
+          if (t.isFixedItem) return false;
+          
+          // 同じ年月でない場合はスキップ
+          if (t.date.year != month.year || t.date.month != month.month) return false;
+          
+          // 以下のいずれかの条件を満たす場合は重複とみなす
+          // 1. IDに元の固定項目のIDが含まれている（_actual_from_XXX形式）
+          if (t.id.contains('_actual_from_${transaction.id}')) return true;
+          
+          // 2. タイトルが一致し、メモに「予定から確定」が含まれている
+          if (t.title == transaction.title && 
+              t.memo != null && 
+              t.memo!.contains('予定から確定')) return true;
+          
+          // 3. タイトルが一致し、固定項目から自動生成されたもの
+          if (t.title == transaction.title && 
+              t.memo != null && 
+              t.memo!.contains('固定項目から自動生成')) return true;
+          
+          // 4. 単純にタイトルが一致する実績（手動入力の可能性もあるが安全側に倒す）
+          if (t.title == transaction.title) return true;
+          
+          return false;
+        });
+
+        if (!existingTransaction) {
+          final adjustedDate = transaction.getAdjustedDate(month);
+
+          final scheduledItem = transaction.copyWith(
+            id: '${transaction.id}_scheduled_${month.year}_${month.month}',
+            date: adjustedDate,
           );
 
-          if (!existingTransaction) {
-            final adjustedDate = transaction.getAdjustedDate(month);
-
-            final scheduledItem = transaction.copyWith(
-              id: '${transaction.id}_scheduled_${month.year}_${month.month}',
-              date: adjustedDate,
-            );
-
-            scheduledItems.add(scheduledItem);
-          }
+          scheduledItems.add(scheduledItem);
         }
       }
     }

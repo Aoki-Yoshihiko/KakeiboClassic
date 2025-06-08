@@ -62,7 +62,7 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
   // テンプレート検索
   List<ItemTemplate> searchTemplates(String query) {
     if (query.isEmpty) return state;
-    
+
     final lowerQuery = query.toLowerCase();
     return state.where((template) =>
       template.title.toLowerCase().contains(lowerQuery) ||
@@ -79,6 +79,73 @@ class ItemTemplateService extends StateNotifier<List<ItemTemplate>> {
   // デフォルトテンプレートを作成
   Future<void> createDefaultTemplates() async {
     final defaultTemplates = [
+      // 【あなたの最初のリクエスト分】コンビニなど
+      ItemTemplate(
+        id: 'template_convenience',
+        title: 'コンビニ',
+        defaultAmount: 500,
+        type: TransactionType.expense,
+        memo: '日用品',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_supermarket',
+        title: 'スーパー',
+        defaultAmount: 3000,
+        type: TransactionType.expense,
+        memo: '食費',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_coffee',
+        title: 'カフェ',
+        defaultAmount: 600,
+        type: TransactionType.expense,
+        memo: '食費',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_train',
+        title: '電車代',
+        defaultAmount: 200,
+        type: TransactionType.expense,
+        memo: '交通費',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_lunch',
+        title: 'ランチ',
+        defaultAmount: 1000,
+        type: TransactionType.expense,
+        memo: '食費',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_taxi',
+        title: 'タクシー',
+        defaultAmount: 2000,
+        type: TransactionType.expense,
+        memo: '交通費',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_drugstore',
+        title: 'ドラッグストア',
+        defaultAmount: 2000,
+        type: TransactionType.expense,
+        memo: '日用品',
+        createdAt: DateTime.now(),
+      ),
+      ItemTemplate(
+        id: 'template_gasoline',
+        title: 'ガソリン',
+        defaultAmount: 5000,
+        type: TransactionType.expense,
+        memo: '交通費',
+        createdAt: DateTime.now(),
+      ),
+
+      // 【あなたの後から提示した】給料や光熱費など
       ItemTemplate(
         id: 'template_salary',
         title: '給料',

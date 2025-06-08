@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../models/holiday_handling.dart';
 import '../services/transaction_service.dart';
-import '../widgets/amount_input_dialog.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
   final Transaction? editingTransaction;
@@ -29,6 +28,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   int _fixedDay = 1;
   HolidayHandling _holidayHandling = HolidayHandling.none;
   bool _showAmountInSchedule = true;
+  String? _selectedCategory;
+
+  // カテゴリの定数を定義
+  static const List<String> incomeCategories = [
+    '給与', '賞与', '副業', '投資', '年金', 'その他収入'
+  ];
+  
+  static const List<String> expenseCategories = [
+    '食費', '住居', '光熱費', '通信費', '交通費', '医療', '保険', 
+    '教育', '娯楽', '被服', '美容', '交際費', 'その他支出'
+  ];
 
   @override
   void initState() {
@@ -49,6 +59,28 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _fixedDay = transaction.fixedDay;
     _holidayHandling = transaction.holidayHandling;
     _showAmountInSchedule = transaction.showAmountInSchedule;
+    
+    // メモからカテゴリを抽出
+    _extractCategoryFromMemo();
+  }
+
+  void _extractCategoryFromMemo() {
+    final memo = _memoController.text;
+    final categories = _selectedType == TransactionType.income 
+        ? incomeCategories 
+        : expenseCategories;
+    
+    for (final category in categories) {
+      if (memo.contains(category)) {
+        _selectedCategory = category;
+        // カテゴリ部分をメモから除去
+        final cleanMemo = memo.replaceAll(category, '').trim();
+        _memoController.text = cleanMemo.startsWith(' - ') 
+            ? cleanMemo.substring(3) 
+            : cleanMemo;
+        break;
+      }
+    }
   }
 
   @override
@@ -93,7 +125,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             title: const Text('収入'),
                             value: TransactionType.income,
                             groupValue: _selectedType,
-                            onChanged: (value) => setState(() => _selectedType = value!),
+                            onChanged: (value) => setState(() {
+                              _selectedType = value!;
+                              _selectedCategory = null; // カテゴリをリセット
+                            }),
                           ),
                         ),
                         Expanded(
@@ -101,7 +136,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             title: const Text('支出'),
                             value: TransactionType.expense,
                             groupValue: _selectedType,
-                            onChanged: (value) => setState(() => _selectedType = value!),
+                            onChanged: (value) => setState(() {
+                              _selectedType = value!;
+                              _selectedCategory = null; // カテゴリをリセット
+                            }),
                           ),
                         ),
                       ],
@@ -128,6 +166,28 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       validator: (value) => value?.isEmpty == true ? '項目名を入力してください' : null,
                     ),
                     const SizedBox(height: 16),
+                    
+                    // カテゴリ選択
+                    DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      decoration: const InputDecoration(
+                        labelText: 'カテゴリ',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: (_selectedType == TransactionType.income 
+                          ? incomeCategories 
+                          : expenseCategories)
+                          .map((category) => DropdownMenuItem(
+                                value: category,
+                                child: Text(category),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() => _selectedCategory = value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    
                     TextFormField(
                       controller: _amountController,
                       decoration: const InputDecoration(
@@ -444,7 +504,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     transaction.fixedDay = _fixedDay;
     transaction.holidayHandling = _holidayHandling;
     transaction.showAmountInSchedule = _showAmountInSchedule;
-    transaction.memo = _memoController.text.isEmpty ? null : _memoController.text;
+    
+    // メモにカテゴリを含める
+    String finalMemo = _memoController.text;
+    if (_selectedCategory != null) {
+      finalMemo = finalMemo.isEmpty 
+          ? _selectedCategory! 
+          : '$_selectedCategory - $finalMemo';
+    }
+    transaction.memo = finalMemo.isEmpty ? null : finalMemo;
+    
     transaction.createdAt = widget.editingTransaction?.createdAt ?? DateTime.now();
     transaction.updatedAt = DateTime.now();
 
@@ -460,7 +529,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   void _confirmAsActual() {
     if (!_formKey.currentState!.validate()) return;
 
-    // 現在の入力値を基にTransactionを作成
     final currentTransactionAmount = double.parse(_amountController.text.replaceAll(',', ''));
 
     showDialog(
@@ -475,46 +543,50 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // 最初の確認ダイアログを閉じる
+              Navigator.pop(context);
 
               double finalAmount = currentTransactionAmount;
 
               // showAmountInSchedule が false の場合（毎回入力設定）に金額入力ダイアログを表示
               if (!_showAmountInSchedule) {
-                final double? inputAmount = await showAmountInputDialog(
-                  context,
-                  initialAmount: currentTransactionAmount,
-                );
-
+                final double? inputAmount = await _showAmountInputDialog(currentTransactionAmount);
                 if (inputAmount == null) {
-                  // ユーザーが金額入力ダイアログでキャンセルした場合
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('実績化をキャンセルしました。')),
                   );
-                  return; // 処理を中断
+                  return;
                 }
-                finalAmount = inputAmount; // ユーザーが入力した金額を反映
+                finalAmount = inputAmount;
               }
               
-              // 実績としての新しいTransactionオブジェクトを作成
+              final originalId = widget.editingTransaction?.id ?? '';
+              
+              // メモにカテゴリを含める
+              String finalMemo = '${_memoController.text}（予定から確定）';
+              if (_selectedCategory != null) {
+                finalMemo = _memoController.text.isEmpty 
+                    ? '$_selectedCategory（予定から確定）'
+                    : '$_selectedCategory - ${_memoController.text}（予定から確定）';
+              }
+              
               final actualTransaction = Transaction()
-                ..id = DateTime.now().millisecondsSinceEpoch.toString()
+                ..id = '${DateTime.now().millisecondsSinceEpoch}_actual_from_$originalId'
                 ..title = _titleController.text
-                ..amount = finalAmount // 確定した金額を使用
+                ..amount = finalAmount
                 ..date = _selectedDate
                 ..type = _selectedType
-                ..isFixedItem = false // 実績なのでfalse
-                ..fixedMonths = [] // 実績には不要
-                ..fixedDay = 1 // 実績には不要
-                ..holidayHandling = HolidayHandling.none // 実績には不要
-                ..showAmountInSchedule = false // 実績なのでfalse
-                ..memo = '${_memoController.text}（予定から確定）'
+                ..isFixedItem = false
+                ..fixedMonths = []
+                ..fixedDay = 1
+                ..holidayHandling = HolidayHandling.none
+                ..showAmountInSchedule = false
+                ..memo = finalMemo
                 ..createdAt = DateTime.now()
                 ..updatedAt = DateTime.now();
 
               ref.read(transactionServiceProvider.notifier).addTransaction(actualTransaction);
               
-              Navigator.pop(context); // AddTransactionScreenを閉じる
+              Navigator.pop(context);
               
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -531,6 +603,51 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         ],
       ),
     );
+  }
+
+  Future<double?> _showAmountInputDialog(double initialAmount) async {
+    final controller = TextEditingController(text: initialAmount.round().toString());
+    double? result;
+
+    await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('実績金額を入力'),
+        content: TextFormField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: '金額',
+            border: OutlineInputBorder(),
+            suffixText: '円',
+          ),
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            _ThousandsSeparatorInputFormatter(),
+          ],
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text.replaceAll(',', ''));
+              if (amount != null) {
+                result = amount;
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('確定'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    return result;
   }
 
   @override

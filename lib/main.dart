@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'services/database_service.dart';
+import 'services/theme_service.dart';
 import 'screens/home_screen.dart';
-// import 'screens/settings_screen.dart'; // テーマプロバイダー用
 
 // グローバルなDatabaseServiceインスタンス
 final DatabaseService globalDatabaseService = DatabaseService();
@@ -28,41 +28,13 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // final themeMode = ref.watch(themeModeProvider);
+    final themeMode = ref.watch(themeServiceProvider);
     
     return MaterialApp(
       title: '家計簿～暮らしっく',
-      themeMode: ThemeMode.light,
-      theme: ThemeData(
-        primarySwatch: Colors.teal,
-        useMaterial3: true,
-        brightness: Brightness.light,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-      darkTheme: ThemeData(
-        primarySwatch: Colors.teal,
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
+      themeMode: themeMode,
+      theme: ThemeService.lightTheme,
+      darkTheme: ThemeService.darkTheme,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

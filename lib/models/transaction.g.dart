@@ -31,13 +31,14 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       ..fixedDay = fields[11] == null ? 1 : fields[11] as int
       ..holidayHandling = fields[12] == null
           ? HolidayHandling.none
-          : fields[12] as HolidayHandling;
+          : fields[12] as HolidayHandling
+      ..category = fields[13] as String?;
   }
 
   @override
   void write(BinaryWriter writer, Transaction obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -63,7 +64,9 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       ..writeByte(11)
       ..write(obj.fixedDay)
       ..writeByte(12)
-      ..write(obj.holidayHandling);
+      ..write(obj.holidayHandling)
+      ..writeByte(14)
+      ..write(obj.category);
   }
 
   @override
@@ -79,7 +82,7 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
 
 class TransactionTypeAdapter extends TypeAdapter<TransactionType> {
   @override
-  final int typeId = 1;
+  final int typeId = 4;
 
   @override
   TransactionType read(BinaryReader reader) {
