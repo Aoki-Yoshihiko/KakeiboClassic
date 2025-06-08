@@ -241,6 +241,11 @@ class TransactionService extends StateNotifier<List<Transaction>> {
 
     for (final transaction in state) {
       if (transaction.isFixedItem && transaction.isFixedInMonth(month.month)) {
+        // *** 当月の場合は予定を表示しない（実績のみ） ***
+        if (targetMonth.year == currentMonth.year && targetMonth.month == currentMonth.month) {
+          continue; // 当月は予定を表示しない
+        }
+        
         // より厳密な重複チェック：
         // 1. 同じ固定項目IDから生成された実績があるか
         // 2. 同じタイトルで同じ月の実績があるか
@@ -290,16 +295,44 @@ class TransactionService extends StateNotifier<List<Transaction>> {
 
   // 期間ごとのサマリーを取得するメソッド
   PeriodSummary getPeriodSummary(DateTime startDate, DateTime endDate) {
-    final transactionsInPeriod = state.where((t) {
+    final now = DateTime.now();
+    final currentDate = DateTime(now.year, now.month, now.day);
+    
+    // 実績データ（過去〜現在）
+    final actualTransactions = state.where((t) {
       return (t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
               t.date.isBefore(endDate.add(const Duration(days: 1)))) &&
-             !t.isFixedItem;
+             !t.isFixedItem &&
+             !t.date.isAfter(currentDate); // 現在日以前のみ
     }).toList();
+
+    // 未来期間が含まれる場合は予定データも追加
+    List<Transaction> allTransactions = List.from(actualTransactions);
+    
+    if (endDate.isAfter(currentDate)) {
+      // 未来期間の予定データを取得
+      final futureMonths = <DateTime>{};
+      DateTime month = DateTime(currentDate.year, currentDate.month + 1);
+      while (month.isBefore(endDate.add(const Duration(days: 1)))) {
+        futureMonths.add(month);
+        month = DateTime(month.year, month.month + 1);
+      }
+      
+      for (final month in futureMonths) {
+        final scheduledItems = getScheduledItemsForMonth(month);
+        final filteredScheduled = scheduledItems.where((t) {
+          return t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
+                 t.date.isBefore(endDate.add(const Duration(days: 1))) &&
+                 t.showAmountInSchedule; // 金額が確定している予定のみ
+        }).toList();
+        allTransactions.addAll(filteredScheduled);
+      }
+    }
 
     double totalIncome = 0;
     double totalExpense = 0;
 
-    for (var t in transactionsInPeriod) {
+    for (var t in allTransactions) {
       if (t.type == TransactionType.income) {
         totalIncome += t.amount;
       } else {
@@ -307,7 +340,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
       }
     }
 
-    final categoryTotals = _calculateCategoryTotals(transactionsInPeriod);
+    final categoryTotals = _calculateCategoryTotals(allTransactions);
 
     return PeriodSummary(
       startDate: startDate,
@@ -316,7 +349,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
       totalExpense: totalExpense,
       balance: totalIncome - totalExpense,
       categoryTotals: categoryTotals,
-      transactions: transactionsInPeriod,
+      transactions: allTransactions,
     );
   }
 

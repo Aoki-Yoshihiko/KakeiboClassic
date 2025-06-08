@@ -28,6 +28,11 @@ class CategoryConstants {
     'その他支出',
   ];
 
+  // タイプに応じたカテゴリリストを取得
+  static List<String> getCategoriesForType(TransactionType type) {
+    return type == TransactionType.income ? incomeCategories : expenseCategories;
+  }
+
   // カテゴリのアイコンを取得
   static IconData getCategoryIcon(String category) {
     switch (category) {

@@ -1,44 +1,48 @@
-name: household_manager
-description: 家計簿管理アプリ
-
+name: kurashikku
+description: "家計簿アプリ〜暮らしっく"
 publish_to: 'none'
+
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
-  flutter: ">=3.10.0"
+  sdk: '>=3.1.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  
+  flutter_localizations:
+    sdk: flutter
+
   # 状態管理
-  flutter_riverpod: ^2.4.0
-  
+  flutter_riverpod: ^2.4.9
+
   # データベース
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  
-  # 日付管理
-  intl: ^0.20.2
+
+  # UI・デザイン
+  cupertino_icons: ^1.0.2
+#  intl: 0.20.2
   
   # ファイル操作
   path_provider: ^2.1.1
-  file_picker: ^8.0.0+1
   share_plus: ^7.2.1
+  file_picker: ^6.1.1
   
-  # UI
-  flutter_localizations:
-    sdk: flutter
+  # チャート表示
+  fl_chart: ^1.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
   
-  # コード生成
+  # Hive コード生成
   hive_generator: ^2.0.1
   build_runner: ^2.4.7
 
 flutter:
   uses-material-design: true
+  
+  # 多言語対応（日本語）
+  generate: true

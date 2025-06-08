@@ -474,8 +474,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: DateTime(2000), // 2000年から
+      lastDate: DateTime(2100),  // 2100年まで
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);

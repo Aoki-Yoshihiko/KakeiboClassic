@@ -74,8 +74,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: ref.read(selectedMonthProvider),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: DateTime(2000), // 2000年から
+      lastDate: DateTime(2100),  // 2100年まで
       initialDatePickerMode: DatePickerMode.year,
       locale: const Locale('ja', 'JP'),
     );

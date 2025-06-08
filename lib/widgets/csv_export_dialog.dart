@@ -170,7 +170,7 @@ class _CSVExportDialogState extends ConsumerState<CSVExportDialog> {
     final date = await showDatePicker(
       context: context,
       initialDate: _startDate,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2000), // 2000年から
       lastDate: _endDate,
       locale: const Locale('ja', 'JP'),
     );
@@ -184,7 +184,7 @@ class _CSVExportDialogState extends ConsumerState<CSVExportDialog> {
       context: context,
       initialDate: _endDate,
       firstDate: _startDate,
-      lastDate: DateTime.now(),
+      lastDate: DateTime(2100), // 2100年まで
       locale: const Locale('ja', 'JP'),
     );
     if (date != null) {

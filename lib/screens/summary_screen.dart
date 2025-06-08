@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../models/transaction.dart';
 import '../services/transaction_service.dart';
+import '../constants/category_constants.dart';
+import '../widgets/csv_export_dialog.dart';
 
 class SummaryScreen extends ConsumerStatefulWidget {
   const SummaryScreen({super.key});
@@ -11,294 +14,547 @@ class SummaryScreen extends ConsumerStatefulWidget {
   ConsumerState<SummaryScreen> createState() => _SummaryScreenState();
 }
 
-class _SummaryScreenState extends ConsumerState<SummaryScreen> {
+class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
-  DateTime _endDate = DateTime.now();
-  String? _selectedCategory;
+  DateTime _endDate = DateTime.now().add(const Duration(days: 30)); // 未来30日まで初期設定
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final transactionService = ref.watch(transactionServiceProvider.notifier);
-    final summary = transactionService.getPeriodSummary(_startDate, _endDate);
-    
-    // カテゴリでフィルタリング
-    final filteredTransactions = _selectedCategory == null
-        ? summary.transactions
-        : summary.transactions.where((t) => t.category == _selectedCategory).toList();
-
-    final filteredIncome = filteredTransactions
-        .where((t) => t.type == TransactionType.income)
-        .fold(0.0, (sum, t) => sum + t.amount);
-    
-    final filteredExpense = filteredTransactions
-        .where((t) => t.type == TransactionType.expense)
-        .fold(0.0, (sum, t) => sum + t.amount);
+    final periodSummary = transactionService.getPeriodSummary(_startDate, _endDate);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('サマリー'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: '期間収支'),
+            Tab(text: 'カテゴリ'),
+            Tab(text: 'チャート'),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            onPressed: () => _showCSVExportDialog(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // 期間選択
-          Card(
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('期間選択', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Row(
+          // 期間選択部分
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Theme.of(context).colorScheme.surface,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _selectStartDate(context),
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: '開始日',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.calendar_today),
+                          ),
+                          child: Text(
+                            DateFormat('yyyy/MM/dd').format(_startDate),
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _selectEndDate(context),
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: '終了日',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.calendar_today),
+                          ),
+                          child: Text(
+                            DateFormat('yyyy/MM/dd').format(_endDate),
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                
+                // プリセット期間ボタン
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => _selectStartDate(),
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: '開始日',
-                              border: OutlineInputBorder(),
-                            ),
-                            child: Text(DateFormat('yyyy/MM/dd').format(_startDate)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => _selectEndDate(),
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: '終了日',
-                              border: OutlineInputBorder(),
-                            ),
-                            child: Text(DateFormat('yyyy/MM/dd').format(_endDate)),
-                          ),
-                        ),
-                      ),
+                      _buildPresetButton('今月', _getThisMonth),
+                      const SizedBox(width: 8),
+                      _buildPresetButton('先月', _getLastMonth),
+                      const SizedBox(width: 8),
+                      _buildPresetButton('今年', _getThisYear),
+                      const SizedBox(width: 8),
+                      _buildPresetButton('過去30日', _getLast30Days),
+                      const SizedBox(width: 8),
+                      _buildPresetButton('未来30日', _getNext30Days), // 未来期間追加
+                      const SizedBox(width: 8),
+                      _buildPresetButton('今月+来月', _getThisAndNextMonth), // 今月+来月追加
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // カテゴリフィルター
-                  DropdownButtonFormField<String?>(
-                    value: _selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'カテゴリフィルター',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('すべて'),
-                      ),
-                      ...summary.categoryTotals.keys.map((category) =>
-                          DropdownMenuItem<String?>(
-                            value: category,
-                            child: Text(category),
-                          ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedCategory = value;
-                      });
-                    },
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-
-          // サマリー表示
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildSummaryRow('収入', filteredIncome, Colors.green),
-                  const Divider(),
-                  _buildSummaryRow('支出', filteredExpense, Colors.red),
-                  const Divider(),
-                  _buildSummaryRow(
-                    '収支',
-                    filteredIncome - filteredExpense,
-                    (filteredIncome - filteredExpense) >= 0 ? Colors.green : Colors.red,
-                    isBalance: true,
-                  ),
-                ],
-              ),
+          
+          // メインコンテンツ
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildPeriodSummaryTab(periodSummary),
+                _buildCategoryTab(periodSummary),
+                _buildChartTab(periodSummary),
+              ],
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // カテゴリ別集計（選択されていない場合のみ）
-          if (_selectedCategory == null)
-            Expanded(
-              child: Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'カテゴリ別集計',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: summary.categoryTotals.length,
-                        itemBuilder: (context, index) {
-                          final entry = summary.categoryTotals.entries.elementAt(index);
-                          final transactions = summary.transactions
-                              .where((t) => t.category == entry.key)
-                              .toList();
-                          final isIncome = transactions.isNotEmpty && 
-                              transactions.first.type == TransactionType.income;
-                          
-                          return ListTile(
-                            title: Text(entry.key),
-                            subtitle: Text('${transactions.length}件'),
-                            trailing: Text(
-                              '${NumberFormat('#,###').format(entry.value.round())}円',
-                              style: TextStyle(
-                                color: isIncome ? Colors.green : Colors.red,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            onTap: () {
-                              setState(() {
-                                _selectedCategory = entry.key;
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            // 選択カテゴリの取引一覧
-            Expanded(
-              child: Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Text(
-                            '$_selectedCategory の取引',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _selectedCategory = null;
-                              });
-                            },
-                            child: const Text('クリア'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filteredTransactions.length,
-                        itemBuilder: (context, index) {
-                          final transaction = filteredTransactions[index];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: transaction.type == TransactionType.income
-                                  ? Colors.green
-                                  : Colors.red,
-                              child: Icon(
-                                transaction.type == TransactionType.income
-                                    ? Icons.add
-                                    : Icons.remove,
-                                color: Colors.white,
-                              ),
-                            ),
-                            title: Text(transaction.title),
-                            subtitle: Text(DateFormat('yyyy/MM/dd').format(transaction.date)),
-                            trailing: Text(
-                              '${NumberFormat('#,###').format(transaction.amount.round())}円',
-                              style: TextStyle(
-                                color: transaction.type == TransactionType.income
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryRow(String label, double amount, Color color, {bool isBalance = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildPresetButton(String label, VoidCallback onPressed) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 12)),
+    );
+  }
+
+  // プリセット期間設定メソッド
+  void _getThisMonth() {
+    final now = DateTime.now();
+    setState(() {
+      _startDate = DateTime(now.year, now.month, 1);
+      _endDate = DateTime(now.year, now.month + 1, 0);
+    });
+  }
+
+  void _getLastMonth() {
+    final now = DateTime.now();
+    setState(() {
+      _startDate = DateTime(now.year, now.month - 1, 1);
+      _endDate = DateTime(now.year, now.month, 0);
+    });
+  }
+
+  void _getThisYear() {
+    final now = DateTime.now();
+    setState(() {
+      _startDate = DateTime(now.year, 1, 1);
+      _endDate = DateTime(now.year, 12, 31);
+    });
+  }
+
+  void _getLast30Days() {
+    final now = DateTime.now();
+    setState(() {
+      _startDate = now.subtract(const Duration(days: 30));
+      _endDate = now;
+    });
+  }
+
+  void _getNext30Days() {
+    final now = DateTime.now();
+    setState(() {
+      _startDate = now;
+      _endDate = now.add(const Duration(days: 30));
+    });
+  }
+
+  void _getThisAndNextMonth() {
+    final now = DateTime.now();
+    setState(() {
+      _startDate = DateTime(now.year, now.month, 1);
+      _endDate = DateTime(now.year, now.month + 2, 0); // 来月末まで
+    });
+  }
+
+  Future<void> _selectStartDate(BuildContext context) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2000), // 2000年から
+      lastDate: DateTime(2100),  // 2100年まで
+      locale: const Locale('ja', 'JP'),
+    );
+    if (date != null && date.isBefore(_endDate.add(const Duration(days: 1)))) {
+      setState(() => _startDate = date);
+    }
+  }
+
+  Future<void> _selectEndDate(BuildContext context) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _endDate,
+      firstDate: _startDate,
+      lastDate: DateTime(2100), // 2100年まで
+      locale: const Locale('ja', 'JP'),
+    );
+    if (date != null) {
+      setState(() => _endDate = date);
+    }
+  }
+
+  Widget _buildPeriodSummaryTab(dynamic periodSummary) {
+    final daysDiff = _endDate.difference(_startDate).inDays + 1;
+    final isFuturePeriod = _endDate.isAfter(DateTime.now());
+    
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isBalance ? 18 : 16,
-            fontWeight: isBalance ? FontWeight.bold : FontWeight.normal,
+        // 期間情報
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Text(
+                  '${DateFormat('yyyy年M月d日').format(_startDate)} 〜 ${DateFormat('yyyy年M月d日').format(_endDate)}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Text('期間: ${daysDiff}日'),
+                    if (isFuturePeriod)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          '未来期間含む',
+                          style: TextStyle(fontSize: 12, color: Colors.orange),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-        Text(
-          '${isBalance && amount > 0 ? '+' : ''}${NumberFormat('#,###').format(amount.round())}円',
-          style: TextStyle(
-            fontSize: isBalance ? 18 : 16,
-            fontWeight: isBalance ? FontWeight.bold : FontWeight.normal,
-            color: color,
+
+        const SizedBox(height: 16),
+
+        // 収支サマリー
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Text(
+                  '期間収支',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Text('収入', style: TextStyle(fontSize: 16)),
+                          const SizedBox(height: 8),
+                          Text(
+                            '+${NumberFormat('#,###').format(periodSummary.totalIncome.round())}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 60,
+                      color: Theme.of(context).dividerColor,
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Text('支出', style: TextStyle(fontSize: 16)),
+                          const SizedBox(height: 8),
+                          Text(
+                            '-${NumberFormat('#,###').format(periodSummary.totalExpense.round())}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 60,
+                      color: Theme.of(context).dividerColor,
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Text('残高', style: TextStyle(fontSize: 16)),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${periodSummary.balance >= 0 ? '+' : ''}${NumberFormat('#,###').format(periodSummary.balance.round())}',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: periodSummary.balance >= 0 ? Colors.blue : Colors.orange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                if (isFuturePeriod) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '未来期間の予定データも含まれています',
+                            style: TextStyle(fontSize: 12, color: Colors.orange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // 日次平均
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '日次平均',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        const Text('収入/日'),
+                        Text(
+                          '+${NumberFormat('#,###').format((periodSummary.totalIncome / daysDiff).round())}',
+                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text('支出/日'),
+                        Text(
+                          '-${NumberFormat('#,###').format((periodSummary.totalExpense / daysDiff).round())}',
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text('残高/日'),
+                        Text(
+                          '${(periodSummary.balance / daysDiff) >= 0 ? '+' : ''}${NumberFormat('#,###').format((periodSummary.balance / daysDiff).round())}',
+                          style: TextStyle(
+                            color: (periodSummary.balance / daysDiff) >= 0 ? Colors.blue : Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Future<void> _selectStartDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+  Widget _buildCategoryTab(dynamic periodSummary) {
+    final Map<String, double> categoryTotals = periodSummary.categoryTotals;
+    final sortedCategories = categoryTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          'カテゴリ別集計',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        ...sortedCategories.map((entry) {
+          final category = entry.key;
+          final amount = entry.value;
+          final isIncome = CategoryConstants.incomeCategories.contains(category);
+          
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: isIncome ? Colors.green.shade100 : Colors.red.shade100,
+                child: Icon(
+                  CategoryConstants.getCategoryIcon(category),
+                  color: CategoryConstants.getCategoryColor(category, context),
+                ),
+              ),
+              title: Text(category),
+              trailing: Text(
+                '${isIncome ? '+' : '-'}${NumberFormat('#,###').format(amount.round())}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isIncome ? Colors.green : Colors.red,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ],
     );
-    if (date != null) {
-      setState(() {
-        _startDate = date;
-      });
-    }
   }
 
-  Future<void> _selectEndDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _endDate,
-      firstDate: _startDate,
-      lastDate: DateTime.now(),
-    );
-    if (date != null) {
-      setState(() {
-        _endDate = date;
-      });
+  Widget _buildChartTab(dynamic periodSummary) {
+    final Map<String, double> categoryTotals = periodSummary.categoryTotals;
+    final expenseCategories = categoryTotals.entries
+        .where((entry) => !CategoryConstants.incomeCategories.contains(entry.key))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (expenseCategories.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.pie_chart, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('支出データがありません'),
+          ],
+        ),
+      );
     }
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Text(
+            '支出カテゴリ内訳',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: PieChart(
+              PieChartData(
+                sections: expenseCategories.take(8).map((entry) {
+                  final category = entry.key;
+                  final amount = entry.value;
+                  final percentage = (amount / periodSummary.totalExpense * 100);
+                  
+                  return PieChartSectionData(
+                    color: CategoryConstants.getCategoryColor(category, context),
+                    value: amount,
+                    title: '${percentage.toStringAsFixed(1)}%',
+                    radius: 100,
+                    titleStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  );
+                }).toList(),
+                sectionsSpace: 2,
+                centerSpaceRadius: 40,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: expenseCategories.take(8).map((entry) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: CategoryConstants.getCategoryColor(entry.key, context).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  entry.key,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: CategoryConstants.getCategoryColor(entry.key, context),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCSVExportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const CSVExportDialog(),
+    );
   }
 }
