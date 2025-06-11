@@ -54,7 +54,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
         if (!existingActual) {
           // 新しい実績として保存
           final actualTransaction = Transaction()
-            ..id = '${DateTime.now().millisecondsSinceEpoch}_fixed_actual'
+            ..id = '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}_fixed_actual'
             ..title = transaction.title
             ..amount = transaction.amount
             ..date = actualDateForCurrentMonth
@@ -293,17 +293,19 @@ class TransactionService extends StateNotifier<List<Transaction>> {
     return scheduledItems;
   }
 
+// lib/services/transaction_service.dart の getPeriodSummary メソッドを修正
+
   // 期間ごとのサマリーを取得するメソッド
   PeriodSummary getPeriodSummary(DateTime startDate, DateTime endDate) {
     final now = DateTime.now();
     final currentDate = DateTime(now.year, now.month, now.day);
     
-    // 実績データ（過去〜現在）
+    // 実績データ（日付制限なし - ユーザーが入力した実績は未来日付でも表示）
     final actualTransactions = state.where((t) {
       return (t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
               t.date.isBefore(endDate.add(const Duration(days: 1)))) &&
-             !t.isFixedItem &&
-             !t.date.isAfter(currentDate); // 現在日以前のみ
+            !t.isFixedItem; // 固定項目でない実績のみ
+            // !t.date.isAfter(currentDate) を削除
     }).toList();
 
     // 未来期間が含まれる場合は予定データも追加
@@ -322,8 +324,8 @@ class TransactionService extends StateNotifier<List<Transaction>> {
         final scheduledItems = getScheduledItemsForMonth(month);
         final filteredScheduled = scheduledItems.where((t) {
           return t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
-                 t.date.isBefore(endDate.add(const Duration(days: 1))) &&
-                 t.showAmountInSchedule; // 金額が確定している予定のみ
+                t.date.isBefore(endDate.add(const Duration(days: 1))) &&
+                t.showAmountInSchedule; // 金額が確定している予定のみ
         }).toList();
         allTransactions.addAll(filteredScheduled);
       }
@@ -361,7 +363,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
       if (t.category != null && t.category!.isNotEmpty) {
         category = t.category!;
       } else {
-        category = t.type == TransactionType.income ? '収入（その他）' : '支出（その他）';
+        category = t.type == TransactionType.income ? 'その他収入' : 'その他支出';
       }
       
       categoryMap.update(category, (value) => value + t.amount, ifAbsent: () => t.amount);
@@ -387,7 +389,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
           final adjustedDate = fixedItem.getAdjustedDate(targetMonth);
 
           final newTransaction = Transaction();
-          newTransaction.id = '${DateTime.now().millisecondsSinceEpoch}_${fixedItem.title}';
+          newTransaction.id = '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}_${fixedItem.title}';
           newTransaction.title = fixedItem.title;
           newTransaction.amount = fixedItem.amount;
           newTransaction.date = adjustedDate;
@@ -585,7 +587,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
         
         // 取引作成
         final transaction = Transaction()
-          ..id = 'csv_import_${DateTime.now().millisecondsSinceEpoch}_$i'
+          ..id = 'csv_import_${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}_$i'
           ..title = title
           ..amount = amount
           ..date = date

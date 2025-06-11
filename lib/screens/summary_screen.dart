@@ -471,6 +471,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
     );
   }
 
+  // _buildChartTab メソッドを以下に置き換え
   Widget _buildChartTab(dynamic periodSummary) {
     final Map<String, double> categoryTotals = periodSummary.categoryTotals;
     final expenseCategories = categoryTotals.entries
@@ -486,6 +487,12 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
             Icon(Icons.pie_chart, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text('支出データがありません'),
+            SizedBox(height: 8),
+            Text(
+              '支出を入力すると、カテゴリ別の内訳が表示されます',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -526,25 +533,78 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
             ),
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: expenseCategories.take(8).map((entry) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: CategoryConstants.getCategoryColor(entry.key, context).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  entry.key,
+          
+          // 凡例表示を改善
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '📊 カテゴリ別内訳',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: CategoryConstants.getCategoryColor(entry.key, context),
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-              );
-            }).toList(),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: expenseCategories.take(8).map((entry) {
+                    final category = entry.key;
+                    final amount = entry.value;
+                    final percentage = (amount / periodSummary.totalExpense * 100);
+                    
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: CategoryConstants.getCategoryColor(category, context).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: CategoryConstants.getCategoryColor(category, context).withOpacity(0.5),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: CategoryConstants.getCategoryColor(category, context),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            category,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: CategoryConstants.getCategoryColor(category, context),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${percentage.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
           ),
         ],
       ),

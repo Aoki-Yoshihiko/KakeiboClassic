@@ -110,13 +110,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     );
   }
 
-  // UIを強制更新するヘルパーメソッド
+  // // UIを強制更新するヘルパーメソッド
+  // void _forceUpdate() {
+  //   final currentMonth = ref.read(selectedMonthProvider);
+  //   // 強制的にProviderを無効化して再構築
+  //   ref.invalidate(transactionServiceProvider);
+  //   // 現在の状態を一度リセットしてから再設定することで、確実に更新
+  //   ref.read(selectedMonthProvider.notifier).state = DateTime(currentMonth.year, currentMonth.month, 1);
+  // }
+  // 修正後（安全軽量版）
   void _forceUpdate() {
-    final currentMonth = ref.read(selectedMonthProvider);
-    // 強制的にProviderを無効化して再構築
-    ref.invalidate(transactionServiceProvider);
-    // 現在の状態を一度リセットしてから再設定することで、確実に更新
-    ref.read(selectedMonthProvider.notifier).state = DateTime(currentMonth.year, currentMonth.month, 1);
+    // 軽量だが確実な更新
+    if (mounted) {
+      setState(() {}); // 現在のWidgetのみ再描画
+    }
   }
 
   // テンプレート選択ダイアログを表示
@@ -302,7 +309,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     
     // 完全に独立した実績Transactionを作成
     final actualTransaction = Transaction()
-      ..id = '${DateTime.now().millisecondsSinceEpoch}_actual_from_${originalFixedItemId}'
+      ..id = '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}_actual_from_$originalFixedItemId'
       ..title = scheduledItem.title
       ..amount = finalAmount
       ..date = scheduledItem.date // 予定の日付をそのまま使用

@@ -482,11 +482,15 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
+  // lib/screens/add_transaction_screen.dart の _saveTransaction メソッドを修正
+
   void _saveTransaction() {
     if (!_formKey.currentState!.validate()) return;
 
     final transaction = Transaction();
-    transaction.id = widget.editingTransaction?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    // ID重複防止の修正
+    transaction.id = widget.editingTransaction?.id ?? 
+      '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}';
     transaction.title = _titleController.text;
     transaction.amount = double.parse(_amountController.text.replaceAll(',', ''));
     transaction.date = _selectedDate;
@@ -516,7 +520,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       ref.read(transactionServiceProvider.notifier).addTransaction(transaction);
     }
 
-    Navigator.pop(context);
+    // 保存成功を通知して戻る
+    Navigator.pop(context, true); // ← true を追加（修正箇所）
   }
 
   void _confirmAsActual() {

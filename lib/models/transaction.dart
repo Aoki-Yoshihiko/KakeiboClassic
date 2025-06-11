@@ -61,7 +61,7 @@ class Transaction extends HiveObject {
   Transaction copyWith({
     String? id,
     String? title,
-    double? amount,
+    double? defaultAmount ,
     DateTime? date,
     TransactionType? type,
     bool? isFixedItem,

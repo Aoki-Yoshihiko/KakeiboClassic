@@ -229,6 +229,8 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
     return null;
   }
 
+// lib/widgets/template_selection_dialog.dart の _useTemplate メソッドを修正
+
   void _useTemplate(ItemTemplate template) async {
     // テンプレートからトランザクションを作成
     final transaction = _createTransactionFromTemplate(template);
@@ -236,12 +238,23 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
     // 編集画面で開く
     Navigator.pop(context); // ダイアログを閉じる
     
-    await Navigator.push(
+    final saved = await Navigator.push( // ← saved変数で戻り値を受け取る（修正箇所）
       context,
       MaterialPageRoute(
         builder: (context) => AddTransactionScreen(editingTransaction: transaction),
       ),
     );
+    
+    // 保存された場合のみ成功通知を表示（新規追加箇所）
+    if (saved == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('「${template.title}」を追加しました'),
+          duration: const Duration(seconds: 1),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   // テンプレートからトランザクションを作成するヘルパーメソッド
@@ -249,7 +262,11 @@ class _TemplateSelectionDialogState extends ConsumerState<TemplateSelectionDialo
     final category = _extractCategoryFromMemo(template.memo);
     
     final transaction = Transaction();
-    transaction.id = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // ID重複防止の修正
+    transaction.id = '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}';
+    //          
+
     transaction.title = template.title;
     transaction.amount = template.defaultAmount;
     transaction.date = DateTime.now();
