@@ -4,6 +4,7 @@ import '../services/theme_service.dart';
 import '../services/transaction_service.dart';
 import '../widgets/csv_export_dialog.dart';
 import '../widgets/template_selection_dialog.dart';
+import '../screens/template_management_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});

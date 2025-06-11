@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'services/database_service.dart';
 import 'services/theme_service.dart';
+import 'services/item_template_service.dart';
 import 'screens/home_screen.dart';
 
 // グローバルなDatabaseServiceインスタンス
