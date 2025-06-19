@@ -472,33 +472,37 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
   }
 
   // _buildChartTab メソッドを以下に置き換え
-  Widget _buildChartTab(dynamic periodSummary) {
-    final Map<String, double> categoryTotals = periodSummary.categoryTotals;
-    final expenseCategories = categoryTotals.entries
-        .where((entry) => !CategoryConstants.incomeCategories.contains(entry.key))
-        .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+// lib/screens/summary_screen.dart の _buildChartTab メソッドを修正
 
-    if (expenseCategories.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.pie_chart, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('支出データがありません'),
-            SizedBox(height: 8),
-            Text(
-              '支出を入力すると、カテゴリ別の内訳が表示されます',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
+Widget _buildChartTab(dynamic periodSummary) {
+  final Map<String, double> categoryTotals = periodSummary.categoryTotals;
+  final expenseCategories = categoryTotals.entries
+      .where((entry) => !CategoryConstants.incomeCategories.contains(entry.key))
+      .toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
 
-    return Padding(
+  if (expenseCategories.isEmpty) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.pie_chart, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text('支出データがありません'),
+          SizedBox(height: 8),
+          Text(
+            '支出を入力すると、カテゴリ別の内訳が表示されます',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 修正：SafeArea + SingleChildScrollView で囲む
+  return SafeArea(
+    child: SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -507,7 +511,10 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 16),
-          Expanded(
+          
+          // チャート部分：固定高さに変更
+          SizedBox(
+            height: 300, // 固定高さでチャートを表示
             child: PieChart(
               PieChartData(
                 sections: expenseCategories.take(8).map((entry) {
@@ -532,9 +539,10 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
               ),
             ),
           ),
-          const SizedBox(height: 16),
           
-          // 凡例表示を改善
+          const SizedBox(height: 24),
+          
+          // 凡例表示（スクロール可能エリア）
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -606,10 +614,14 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
               ],
             ),
           ),
+          
+          // 底部の安全余白
+          const SizedBox(height: 24),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showCSVExportDialog(BuildContext context) {
     showDialog(
