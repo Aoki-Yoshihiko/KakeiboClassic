@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# メモリダンプとビルドファイルを除外
+*.hprof
+/build/
+/android/build/
+/**/zip-cache/
+/**/*.so
