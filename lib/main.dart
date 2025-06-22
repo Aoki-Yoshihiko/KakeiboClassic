@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,15 +13,49 @@ final DatabaseService globalDatabaseService = DatabaseService();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // データベース初期化
+  // データベース初期化（エラーハンドリング強化）
   try {
     await globalDatabaseService.init();
     print('Database initialized successfully');
   } catch (e, stackTrace) {
     print('Database initialization error: $e');
     print('Stack trace: $stackTrace');
+    
+    // 致命的エラーの場合はエラー画面を表示
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                'アプリの初期化に失敗しました',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'アプリを再起動してください',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  // アプリ再起動を促す
+                  exit(0);
+                },
+                child: const Text('アプリを終了'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ));
+    return; // 正常なアプリ起動を停止
   }
   
+  // DB初期化成功時のみ通常アプリを起動
   runApp(const ProviderScope(child: MyApp()));
 }
 

@@ -98,37 +98,57 @@ class Transaction extends HiveObject {
     return fixedMonths.isEmpty || fixedMonths.contains(month);
   }
 
-  // 休日処理を適用した実際の日付を取得
+  // 修正された休日処理を適用した実際の日付を取得
   DateTime getAdjustedDate(DateTime targetMonth) {
-    // 月末日を超える場合の処理
-    final lastDayOfMonth = DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
-    final adjustedDay = fixedDay > lastDayOfMonth ? lastDayOfMonth : fixedDay;
-    
-    DateTime targetDate = DateTime(targetMonth.year, targetMonth.month, adjustedDay);
-    
-    if (holidayHandling == HolidayHandling.none) {
-      return targetDate;
-    }
-    
-    // 簡易的な休日判定（土日のみ）
-    while (_isWeekend(targetDate)) {
-      if (holidayHandling == HolidayHandling.before) {
-        targetDate = targetDate.subtract(const Duration(days: 1));
-        // 前月になってしまった場合は、元の日付の前の金曜日を返す
-        if (targetDate.month != targetMonth.month) {
-          targetDate = DateTime(targetMonth.year, targetMonth.month, adjustedDay);
-          while (_isWeekend(targetDate)) {
+    try {
+      // 月末日を超える場合の処理（安全化）
+      final lastDayOfMonth = DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+      final adjustedDay = fixedDay > lastDayOfMonth ? lastDayOfMonth : fixedDay;
+      
+      // 安全な日付作成
+      DateTime targetDate;
+      try {
+        targetDate = DateTime(targetMonth.year, targetMonth.month, adjustedDay);
+      } catch (e) {
+        // 日付作成に失敗した場合は月の1日にフォールバック
+        print('日付作成エラー: ${targetMonth.year}/${targetMonth.month}/$adjustedDay, エラー: $e');
+        targetDate = DateTime(targetMonth.year, targetMonth.month, 1);
+      }
+      
+      if (holidayHandling == HolidayHandling.none) {
+        return targetDate;
+      }
+      
+      // 簡易的な休日判定（土日のみ）
+      while (_isWeekend(targetDate)) {
+        try {
+          if (holidayHandling == HolidayHandling.before) {
             targetDate = targetDate.subtract(const Duration(days: 1));
+            // 前月になってしまった場合は、元の日付の前の金曜日を返す
+            if (targetDate.month != targetMonth.month) {
+              targetDate = DateTime(targetMonth.year, targetMonth.month, adjustedDay);
+              while (_isWeekend(targetDate)) {
+                targetDate = targetDate.subtract(const Duration(days: 1));
+              }
+              break;
+            }
+          } else {
+            targetDate = targetDate.add(const Duration(days: 1));
+            // 翌月になってしまった場合は、そのまま翌月の日付を返す
           }
+        } catch (e) {
+          // 日付計算エラーの場合は元の日付を返す
+          print('休日処理エラー: $e');
           break;
         }
-      } else {
-        targetDate = targetDate.add(const Duration(days: 1));
-        // 翌月になってしまった場合は、そのまま翌月の日付を返す
       }
+      
+      return targetDate;
+    } catch (e) {
+      // 全体的なエラーの場合は安全な日付を返す
+      print('getAdjustedDate 全体エラー: $e');
+      return DateTime(targetMonth.year, targetMonth.month, 1);
     }
-    
-    return targetDate;
   }
 
   bool _isWeekend(DateTime date) {

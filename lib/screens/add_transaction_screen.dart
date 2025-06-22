@@ -180,6 +180,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     ),
                     const SizedBox(height: 16),
                     
+                    // 修正された金額入力フィールド
                     TextFormField(
                       controller: _amountController,
                       decoration: const InputDecoration(
@@ -194,8 +195,20 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       ],
                       validator: (value) {
                         if (value?.isEmpty == true) return '金額を入力してください';
+                        
                         final cleanValue = value!.replaceAll(',', '');
-                        if (int.tryParse(cleanValue) == null) return '正しい金額を入力してください';
+                        
+                        // 数値変換チェック
+                        final parsedValue = double.tryParse(cleanValue);
+                        if (parsedValue == null) return '正しい金額を入力してください';
+                        
+                        // オーバーフロー防止: 最大値チェック
+                        if (parsedValue > 999999999) return '金額が大きすぎます（最大9億9999万円）';
+                        if (parsedValue < 0) return '金額は0以上で入力してください';
+                        
+                        // 無限大・NaN チェック
+                        if (!parsedValue.isFinite) return '正しい金額を入力してください';
+                        
                         return null;
                       },
                     ),
@@ -482,8 +495,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
-  // lib/screens/add_transaction_screen.dart の _saveTransaction メソッドを修正
-
+  // 修正された _saveTransaction メソッド
   void _saveTransaction() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -492,7 +504,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     transaction.id = widget.editingTransaction?.id ?? 
       '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}';
     transaction.title = _titleController.text;
-    transaction.amount = double.parse(_amountController.text.replaceAll(',', ''));
+    
+    // 安全な金額パース
+    final cleanAmount = _amountController.text.replaceAll(',', '');
+    final parsedAmount = double.tryParse(cleanAmount);
+    
+    if (parsedAmount == null || !parsedAmount.isFinite || parsedAmount > 999999999) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('金額の入力に問題があります'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    transaction.amount = parsedAmount;
     transaction.date = _selectedDate;
     transaction.type = _selectedType;
     transaction.isFixedItem = _isFixedItem;

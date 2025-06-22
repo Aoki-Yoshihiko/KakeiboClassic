@@ -110,19 +110,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     );
   }
 
-  // // UIを強制更新するヘルパーメソッド
-  // void _forceUpdate() {
-  //   final currentMonth = ref.read(selectedMonthProvider);
-  //   // 強制的にProviderを無効化して再構築
-  //   ref.invalidate(transactionServiceProvider);
-  //   // 現在の状態を一度リセットしてから再設定することで、確実に更新
-  //   ref.read(selectedMonthProvider.notifier).state = DateTime(currentMonth.year, currentMonth.month, 1);
-  // }
-  // 修正後（安全軽量版）
+  // 修正された強制更新メソッド
   void _forceUpdate() {
-    // 軽量だが確実な更新
     if (mounted) {
-      setState(() {}); // 現在のWidgetのみ再描画
+      // Riverpodの状態を明示的に無効化
+      ref.invalidate(transactionServiceProvider);
+      // UI再描画
+      setState(() {});
     }
   }
 
@@ -509,7 +503,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                     builder: (context) => AddTransactionScreen(editingTransaction: transaction),
                   ),
                 );
-                _forceUpdate();
+                if (result == true) {
+                  _forceUpdate();
+                }
               },
             ),
           ),
@@ -818,13 +814,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               orElse: () => scheduledItem,
             );
             
-            await Navigator.push(
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => AddTransactionScreen(editingTransaction: originalTransaction),
               ),
             );
-            _forceUpdate();
+            if (result == true) {
+              _forceUpdate();
+            }
           },
         ),
       ),
@@ -1354,13 +1352,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
             child: FloatingActionButton(
               heroTag: "add",
               onPressed: () async {
-                await Navigator.push(
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const AddTransactionScreen(),
                   ),
                 );
-                _forceUpdate();
+                // 確実な状態更新
+                if (result == true) {
+                  _forceUpdate();
+                }
               },
               child: const Icon(Icons.add),
             ),

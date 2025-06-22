@@ -38,7 +38,9 @@ class TransactionService extends StateNotifier<List<Transaction>> {
 
       // 固定項目が現在月で発生する場合のみ実績を生成
       if (transaction.isFixedInMonth(currentMonth.month)) {
-        final actualDateForCurrentMonth = transaction.date;
+        // 修正：休日処理を適用した正しい日付を取得
+        final actualDateForCurrentMonth = transaction.getAdjustedDate(currentMonth);
+        // 修正前：final actualDateForCurrentMonth = transaction.date;
 
         // 既にこの固定項目テンプレートから生成された実績がその月に存在しないかチェック
         final existingActual = state.any((t) =>
@@ -57,7 +59,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
             ..id = '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}_fixed_actual'
             ..title = transaction.title
             ..amount = transaction.amount
-            ..date = actualDateForCurrentMonth
+            ..date = actualDateForCurrentMonth // ← 正しい調整済み日付を使用
             ..type = transaction.type
             ..isFixedItem = false
             ..fixedMonths = []
@@ -413,84 +415,109 @@ class TransactionService extends StateNotifier<List<Transaction>> {
 
   // データエクスポート
   Future<String> exportData() async {
-    final data = {
-      'transactions': state.map((t) => t.toJson()).toList(),
-      'exportDate': DateTime.now().toIso8601String(),
-      'version': '1.0.0',
-    };
+    try {
+      final data = {
+        'transactions': state.map((t) => t.toJson()).toList(),
+        'exportDate': DateTime.now().toIso8601String(),
+        'version': '1.0.0',
+      };
 
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/kurashikku_backup_${DateTime.now().millisecondsSinceEpoch}.json');
-    await file.writeAsString(jsonEncode(data));
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/kurashikku_backup_${DateTime.now().millisecondsSinceEpoch}.json');
+      await file.writeAsString(jsonEncode(data));
 
-    return file.path;
+      return file.path;
+    } catch (e) {
+      print('エクスポートエラー: $e');
+      throw Exception('データのエクスポートに失敗しました: $e');
+    }
   }
 
   // CSVエクスポート（全データ）
   Future<String> exportToCSV() async {
-    final transactions = state.where((t) => !t.isFixedItem).toList();
-    transactions.sort((a, b) => a.date.compareTo(b.date));
-    
-    return _exportTransactionsToCSV(transactions, 'all_data');
+    try {
+      final transactions = state.where((t) => !t.isFixedItem).toList();
+      transactions.sort((a, b) => a.date.compareTo(b.date));
+      
+      return _exportTransactionsToCSV(transactions, 'all_data');
+    } catch (e) {
+      print('CSVエクスポートエラー: $e');
+      throw Exception('CSVエクスポートに失敗しました: $e');
+    }
   }
 
   // CSVエクスポート（月指定）
   Future<String> exportMonthToCSV(DateTime month) async {
-    final transactions = state.where((t) {
-      return t.date.year == month.year &&
-             t.date.month == month.month &&
-             !t.isFixedItem;
-    }).toList();
-    transactions.sort((a, b) => a.date.compareTo(b.date));
-    
-    final monthStr = '${month.year}${month.month.toString().padLeft(2, '0')}';
-    return _exportTransactionsToCSV(transactions, 'month_$monthStr');
+    try {
+      final transactions = state.where((t) {
+        return t.date.year == month.year &&
+               t.date.month == month.month &&
+               !t.isFixedItem;
+      }).toList();
+      transactions.sort((a, b) => a.date.compareTo(b.date));
+      
+      final monthStr = '${month.year}${month.month.toString().padLeft(2, '0')}';
+      return _exportTransactionsToCSV(transactions, 'month_$monthStr');
+    } catch (e) {
+      print('月別CSVエクスポートエラー: $e');
+      throw Exception('月別CSVエクスポートに失敗しました: $e');
+    }
   }
 
   // CSVエクスポート（期間指定）
   Future<String> exportPeriodToCSV(DateTime startDate, DateTime endDate) async {
-    final transactions = state.where((t) {
-      return t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
-             t.date.isBefore(endDate.add(const Duration(days: 1))) &&
-             !t.isFixedItem;
-    }).toList();
-    transactions.sort((a, b) => a.date.compareTo(b.date));
-    
-    final startStr = '${startDate.year}${startDate.month.toString().padLeft(2, '0')}${startDate.day.toString().padLeft(2, '0')}';
-    final endStr = '${endDate.year}${endDate.month.toString().padLeft(2, '0')}${endDate.day.toString().padLeft(2, '0')}';
-    return _exportTransactionsToCSV(transactions, 'period_${startStr}_$endStr');
+    try {
+      final transactions = state.where((t) {
+        return t.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
+               t.date.isBefore(endDate.add(const Duration(days: 1))) &&
+               !t.isFixedItem;
+      }).toList();
+      transactions.sort((a, b) => a.date.compareTo(b.date));
+      
+      final startStr = '${startDate.year}${startDate.month.toString().padLeft(2, '0')}${startDate.day.toString().padLeft(2, '0')}';
+      final endStr = '${endDate.year}${endDate.month.toString().padLeft(2, '0')}${endDate.day.toString().padLeft(2, '0')}';
+      return _exportTransactionsToCSV(transactions, 'period_${startStr}_$endStr');
+    } catch (e) {
+      print('期間別CSVエクスポートエラー: $e');
+      throw Exception('期間別CSVエクスポートに失敗しました: $e');
+    }
   }
 
   // CSVエクスポート共通処理
   Future<String> _exportTransactionsToCSV(List<Transaction> transactions, String suffix) async {
-    final buffer = StringBuffer();
-    
-    // BOM付きUTF-8ヘッダー（Excelでの文字化け防止）
-    buffer.write('\uFEFF');
-    
-    // CSVヘッダー
-    buffer.writeln('日付,種類,項目名,金額,カテゴリ,メモ,固定項目');
-    
-    // データ行
-    for (final transaction in transactions) {
-      final dateStr = '${transaction.date.year}/${transaction.date.month.toString().padLeft(2, '0')}/${transaction.date.day.toString().padLeft(2, '0')}';
-      final typeStr = transaction.type == TransactionType.income ? '収入' : '支出';
-      final titleStr = _escapeCsv(transaction.title);
-      final amountStr = transaction.amount.round().toString();
-      final categoryStr = _escapeCsv(transaction.category ?? '');
-      final memoStr = _escapeCsv(transaction.memo ?? '');
-      final fixedStr = transaction.isFixedItem ? '固定' : '';
+    try {
+      final buffer = StringBuffer();
       
-      buffer.writeln('$dateStr,$typeStr,$titleStr,$amountStr,$categoryStr,$memoStr,$fixedStr');
+      // BOM付きUTF-8ヘッダー（Excelでの文字化け防止）
+      buffer.write('\uFEFF');
+      
+      // CSVヘッダー
+      buffer.writeln('日付,種類,項目名,金額,カテゴリ,メモ,固定項目');
+      
+      // データ行
+      for (final transaction in transactions) {
+        final dateStr = '${transaction.date.year}/${transaction.date.month.toString().padLeft(2, '0')}/${transaction.date.day.toString().padLeft(2, '0')}';
+        final typeStr = transaction.type == TransactionType.income ? '収入' : '支出';
+        final titleStr = _escapeCsv(transaction.title);
+        final amountStr = transaction.amount.round().toString();
+        final categoryStr = _escapeCsv(transaction.category ?? '');
+        final memoStr = _escapeCsv(transaction.memo ?? '');
+        final fixedStr = transaction.isFixedItem ? '固定' : '';
+        
+        buffer.writeln('$dateStr,$typeStr,$titleStr,$amountStr,$categoryStr,$memoStr,$fixedStr');
+      }
+      
+      // ファイル保存
+      final directory = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${directory.path}/kurashikku_${suffix}_$timestamp.csv');
+      await file.writeAsString(buffer.toString());
+      
+      return file.path;
+    } catch (e) {
+      print('CSV書き込みエラー: $e');
+      throw Exception('CSVファイルの作成に失敗しました: $e');
     }
-    
-    // ファイル保存
-    final directory = await getApplicationDocumentsDirectory();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final file = File('${directory.path}/kurashikku_${suffix}_$timestamp.csv');
-    await file.writeAsString(buffer.toString());
-    
-    return file.path;
   }
 
   // CSV用文字列エスケープ
@@ -503,116 +530,130 @@ class TransactionService extends StateNotifier<List<Transaction>> {
 
   // データインポート
   Future<void> importData(String filePath) async {
-    final file = File(filePath);
-    if (!await file.exists()) throw Exception('ファイルが見つかりません');
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) throw Exception('ファイルが見つかりません');
 
-    final content = await file.readAsString();
-    final data = jsonDecode(content);
+      final content = await file.readAsString();
+      final data = jsonDecode(content);
 
-    if (data['transactions'] != null) {
-      await _databaseService.transactionBox.clear();
+      if (data['transactions'] != null) {
+        await _databaseService.transactionBox.clear();
 
-      final transactions = (data['transactions'] as List)
-          .map((json) => Transaction.fromJson(json))
-          .toList();
+        final transactions = (data['transactions'] as List)
+            .map((json) => Transaction.fromJson(json))
+            .toList();
 
-      for (final transaction in transactions) {
-        await _databaseService.transactionBox.put(transaction.id, transaction);
+        for (final transaction in transactions) {
+          await _databaseService.transactionBox.put(transaction.id, transaction);
+        }
+
+        _loadTransactions();
       }
-
-      _loadTransactions();
+    } catch (e) {
+      print('インポートエラー: $e');
+      throw Exception('データのインポートに失敗しました: $e');
     }
   }
 
   // CSVインポート
   Future<int> importFromCSV(String filePath) async {
-    final file = File(filePath);
-    if (!await file.exists()) throw Exception('ファイルが見つかりません');
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) throw Exception('ファイルが見つかりません');
 
-    final content = await file.readAsString();
-    final lines = content.split('\n');
-    
-    if (lines.isEmpty) throw Exception('CSVファイルが空です');
-    
-    // ヘッダー行をスキップ
-    int importedCount = 0;
-    
-    for (int i = 1; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) continue;
+      final content = await file.readAsString();
+      final lines = content.split('\n');
       
-      try {
-        final fields = _parseCsvLine(line);
-        if (fields.length < 6) continue; // 最低限必要なフィールド数
+      if (lines.isEmpty) throw Exception('CSVファイルが空です');
+      
+      // ヘッダー行をスキップ
+      int importedCount = 0;
+      
+      // 安全なID生成のためのベースタイムスタンプ（1回だけ取得）
+      final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trim();
+        if (line.isEmpty) continue;
         
-        // CSV形式: 日付,種類,項目名,金額,カテゴリ,メモ,固定項目
-        final dateStr = fields[0];
-        final typeStr = fields[1];
-        final title = fields[2];
-        final amountStr = fields[3];
-        final category = fields.length > 4 ? fields[4] : null;
-        final memo = fields.length > 5 ? fields[5] : null;
-        final isFixedStr = fields.length > 6 ? fields[6] : '';
-        
-        // 日付パース
-        DateTime? date;
         try {
-          final dateParts = dateStr.split('/');
-          if (dateParts.length == 3) {
-            date = DateTime(
-              int.parse(dateParts[0]),
-              int.parse(dateParts[1]),
-              int.parse(dateParts[2]),
-            );
+          final fields = _parseCsvLine(line);
+          if (fields.length < 6) continue; // 最低限必要なフィールド数
+          
+          // CSV形式: 日付,種類,項目名,金額,カテゴリ,メモ,固定項目
+          final dateStr = fields[0];
+          final typeStr = fields[1];
+          final title = fields[2];
+          final amountStr = fields[3];
+          final category = fields.length > 4 ? fields[4] : null;
+          final memo = fields.length > 5 ? fields[5] : null;
+          final isFixedStr = fields.length > 6 ? fields[6] : '';
+          
+          // 日付パース
+          DateTime? date;
+          try {
+            final dateParts = dateStr.split('/');
+            if (dateParts.length == 3) {
+              date = DateTime(
+                int.parse(dateParts[0]),
+                int.parse(dateParts[1]),
+                int.parse(dateParts[2]),
+              );
+            }
+          } catch (e) {
+            continue; // 日付パースエラーの場合はスキップ
           }
+          
+          if (date == null) continue;
+          
+          // 種類パース
+          TransactionType? type;
+          if (typeStr == '収入') {
+            type = TransactionType.income;
+          } else if (typeStr == '支出') {
+            type = TransactionType.expense;
+          }
+          
+          if (type == null) continue;
+          
+          // 金額パース
+          final amount = double.tryParse(amountStr);
+          if (amount == null) continue;
+          
+          // 取引作成 - IDのみ安全化（他は一切変更なし）
+          final transaction = Transaction()
+            ..id = 'csv_import_${baseTimestamp}_${i}_${DateTime.now().microsecond}' // ← より安全なID
+            ..title = title
+            ..amount = amount
+            ..date = date
+            ..type = type
+            ..isFixedItem = isFixedStr == '固定'
+            ..fixedMonths = []
+            ..fixedDay = date.day
+            ..holidayHandling = HolidayHandling.none
+            ..showAmountInSchedule = false
+            ..memo = memo?.isEmpty == true ? null : memo
+            ..category = category?.isEmpty == true ? null : category
+            ..createdAt = DateTime.now()
+            ..updatedAt = DateTime.now();
+          
+          await _databaseService.transactionBox.put(transaction.id, transaction);
+          importedCount++;
+          
         } catch (e) {
-          continue; // 日付パースエラーの場合はスキップ
+          // エラーの場合はその行をスキップして続行
+          print('CSV行 $i のインポートエラー: $e');
+          continue;
         }
-        
-        if (date == null) continue;
-        
-        // 種類パース
-        TransactionType? type;
-        if (typeStr == '収入') {
-          type = TransactionType.income;
-        } else if (typeStr == '支出') {
-          type = TransactionType.expense;
-        }
-        
-        if (type == null) continue;
-        
-        // 金額パース
-        final amount = double.tryParse(amountStr);
-        if (amount == null) continue;
-        
-        // 取引作成
-        final transaction = Transaction()
-          ..id = 'csv_import_${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}_$i'
-          ..title = title
-          ..amount = amount
-          ..date = date
-          ..type = type
-          ..isFixedItem = isFixedStr == '固定'
-          ..fixedMonths = []
-          ..fixedDay = date.day
-          ..holidayHandling = HolidayHandling.none
-          ..showAmountInSchedule = false
-          ..memo = memo?.isEmpty == true ? null : memo
-          ..category = category?.isEmpty == true ? null : category
-          ..createdAt = DateTime.now()
-          ..updatedAt = DateTime.now();
-        
-        await _databaseService.transactionBox.put(transaction.id, transaction);
-        importedCount++;
-        
-      } catch (e) {
-        // エラーの場合はその行をスキップして続行
-        continue;
       }
+      
+      _loadTransactions();
+      return importedCount;
+    } catch (e) {
+      print('CSVインポートエラー: $e');
+      throw Exception('CSVインポートに失敗しました: $e');
     }
-    
-    _loadTransactions();
-    return importedCount;
   }
 
   // CSV行パース（簡易版）

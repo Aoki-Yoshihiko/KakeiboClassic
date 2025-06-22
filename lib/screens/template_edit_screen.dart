@@ -143,6 +143,8 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
                       validator: (value) => value?.isEmpty == true ? 'テンプレート名を入力してください' : null,
                     ),
                     const SizedBox(height: 16),
+                    
+                    // 修正された金額入力フィールド
                     TextFormField(
                       controller: _amountController,
                       decoration: const InputDecoration(
@@ -157,8 +159,20 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
                       ],
                       validator: (value) {
                         if (value?.isEmpty == true) return '金額を入力してください';
+                        
                         final cleanValue = value!.replaceAll(',', '');
-                        if (int.tryParse(cleanValue) == null) return '正しい金額を入力してください';
+                        
+                        // 数値変換チェック
+                        final parsedValue = double.tryParse(cleanValue);
+                        if (parsedValue == null) return '正しい金額を入力してください';
+                        
+                        // オーバーフロー防止: 最大値チェック
+                        if (parsedValue > 999999999) return '金額が大きすぎます（最大9億9999万円）';
+                        if (parsedValue < 0) return '金額は0以上で入力してください';
+                        
+                        // 無限大・NaN チェック
+                        if (!parsedValue.isFinite) return '正しい金額を入力してください';
+                        
                         return null;
                       },
                     ),
@@ -272,8 +286,23 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     );
   }
 
+  // 修正された _saveTemplate メソッド
   void _saveTemplate() {
     if (!_formKey.currentState!.validate()) return;
+
+    // 安全な金額パース
+    final cleanAmount = _amountController.text.replaceAll(',', '');
+    final parsedAmount = double.tryParse(cleanAmount);
+    
+    if (parsedAmount == null || !parsedAmount.isFinite || parsedAmount > 999999999) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('金額の入力に問題があります'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     // メモにカテゴリ情報を含める
     String? memo = _memoController.text.isEmpty ? null : _memoController.text;
@@ -284,7 +313,7 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     final template = ItemTemplate(
       id: widget.template?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text,
-      defaultAmount: double.parse(_amountController.text.replaceAll(',', '')),
+      defaultAmount: parsedAmount, // 安全にパースした金額を使用
       type: _selectedType,
       memo: memo,
       createdAt: widget.template?.createdAt ?? DateTime.now(),

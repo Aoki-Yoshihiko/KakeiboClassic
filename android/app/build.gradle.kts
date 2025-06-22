@@ -6,9 +6,9 @@ plugins {
 }
 
 android {
-    namespace = "com.example.household_manager"
+    namespace = "com.example.household_manager"  // ← これに変更
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973" // ← ここを修正！
+    ndkVersion = "27.0.12077973"  // ここを変更
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -32,8 +32,8 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            isMinifyEnabled = false  // コード最適化を無効化
+            isShrinkResources = false  // リソース最適化を無効化
             signingConfig = signingConfigs.getByName("debug")
         }
     }

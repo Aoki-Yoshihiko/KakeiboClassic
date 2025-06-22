@@ -471,157 +471,155 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
     );
   }
 
-  // _buildChartTab メソッドを以下に置き換え
-// lib/screens/summary_screen.dart の _buildChartTab メソッドを修正
+  // 修正された _buildChartTab メソッド
+  Widget _buildChartTab(dynamic periodSummary) {
+    final Map<String, double> categoryTotals = periodSummary.categoryTotals;
+    final expenseCategories = categoryTotals.entries
+        .where((entry) => !CategoryConstants.incomeCategories.contains(entry.key))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
-Widget _buildChartTab(dynamic periodSummary) {
-  final Map<String, double> categoryTotals = periodSummary.categoryTotals;
-  final expenseCategories = categoryTotals.entries
-      .where((entry) => !CategoryConstants.incomeCategories.contains(entry.key))
-      .toList()
-    ..sort((a, b) => b.value.compareTo(a.value));
-
-  if (expenseCategories.isEmpty) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.pie_chart, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('支出データがありません'),
-          SizedBox(height: 8),
-          Text(
-            '支出を入力すると、カテゴリ別の内訳が表示されます',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 修正：SafeArea + SingleChildScrollView で囲む
-  return SafeArea(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Text(
-            '支出カテゴリ内訳',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 16),
-          
-          // チャート部分：固定高さに変更
-          SizedBox(
-            height: 300, // 固定高さでチャートを表示
-            child: PieChart(
-              PieChartData(
-                sections: expenseCategories.take(8).map((entry) {
-                  final category = entry.key;
-                  final amount = entry.value;
-                  final percentage = (amount / periodSummary.totalExpense * 100);
-                  
-                  return PieChartSectionData(
-                    color: CategoryConstants.getCategoryColor(category, context),
-                    value: amount,
-                    title: '${percentage.toStringAsFixed(1)}%',
-                    radius: 100,
-                    titleStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  );
-                }).toList(),
-                sectionsSpace: 2,
-                centerSpaceRadius: 40,
-              ),
+    if (expenseCategories.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.pie_chart, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('支出データがありません'),
+            SizedBox(height: 8),
+            Text(
+              '支出を入力すると、カテゴリ別の内訳が表示されます',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // 凡例表示（スクロール可能エリア）
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
+          ],
+        ),
+      );
+    }
+
+    // 修正：SafeArea + SingleChildScrollView で囲む
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              '支出カテゴリ内訳',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '📊 カテゴリ別内訳',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: expenseCategories.take(8).map((entry) {
+            const SizedBox(height: 16),
+            
+            // チャート部分：固定高さに変更
+            SizedBox(
+              height: 300, // 固定高さでチャートを表示
+              child: PieChart(
+                PieChartData(
+                  sections: expenseCategories.take(8).map((entry) {
                     final category = entry.key;
                     final amount = entry.value;
                     final percentage = (amount / periodSummary.totalExpense * 100);
                     
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: CategoryConstants.getCategoryColor(category, context).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: CategoryConstants.getCategoryColor(category, context).withOpacity(0.5),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: CategoryConstants.getCategoryColor(category, context),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            category,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: CategoryConstants.getCategoryColor(category, context),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${percentage.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                    return PieChartSectionData(
+                      color: CategoryConstants.getCategoryColor(category, context),
+                      value: amount,
+                      title: '${percentage.toStringAsFixed(1)}%',
+                      radius: 100,
+                      titleStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     );
                   }).toList(),
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 40,
                 ),
-              ],
+              ),
             ),
-          ),
-          
-          // 底部の安全余白
-          const SizedBox(height: 24),
-        ],
+            
+            const SizedBox(height: 24),
+            
+            // 凡例表示（スクロール可能エリア）
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '📊 カテゴリ別内訳',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: expenseCategories.take(8).map((entry) {
+                      final category = entry.key;
+                      final amount = entry.value;
+                      final percentage = (amount / periodSummary.totalExpense * 100);
+                      
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: CategoryConstants.getCategoryColor(category, context).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: CategoryConstants.getCategoryColor(category, context).withOpacity(0.5),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: CategoryConstants.getCategoryColor(category, context),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              category,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: CategoryConstants.getCategoryColor(category, context),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${percentage.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            
+            // 底部の安全余白
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   void _showCSVExportDialog(BuildContext context) {
     showDialog(
