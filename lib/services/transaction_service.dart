@@ -18,7 +18,9 @@ class TransactionService extends StateNotifier<List<Transaction>> {
     _loadTransactions();
   }
 
-  void _loadTransactions() {
+  Future<void> _loadTransactions() async {
+    // Hiveの読み込みを確実に待つ（より長い遅延）
+    await Future.delayed(const Duration(milliseconds: 100));
     final transactions = _databaseService.transactionBox.values.toList();
     transactions.sort((a, b) => a.date.compareTo(b.date));
     state = transactions;
@@ -72,6 +74,8 @@ class TransactionService extends StateNotifier<List<Transaction>> {
             ..updatedAt = DateTime.now();
 
           await _databaseService.transactionBox.put(actualTransaction.id, actualTransaction);
+          // 実績追加後も少し待つ
+          await Future.delayed(const Duration(milliseconds: 50));
         }
       }
     } else {
@@ -79,7 +83,8 @@ class TransactionService extends StateNotifier<List<Transaction>> {
       await _databaseService.transactionBox.put(transaction.id, transaction);
     }
 
-    _loadTransactions();
+    // データベースへの書き込みを確実に待ってから状態を更新
+    await _loadTransactions();
   }
 
   // 新しいメソッド：実績を直接保存（重複防止版）
@@ -108,7 +113,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
     print('実績を保存しました: ${transaction.id}');
     
     // 状態を更新
-    _loadTransactions();
+    await _loadTransactions();
   }
 
   // 新しいメソッド：固定項目を完全削除
@@ -131,7 +136,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
     }
     
     // 3. 状態を更新
-    _loadTransactions();
+    await _loadTransactions();
     print('固定項目完全削除完了');
   }
 
@@ -140,12 +145,12 @@ class TransactionService extends StateNotifier<List<Transaction>> {
       updatedAt: DateTime.now(),
     );
     await _databaseService.transactionBox.put(transaction.id, updatedTransaction);
-    _loadTransactions();
+    await _loadTransactions();
   }
 
   Future<void> deleteTransaction(String id) async {
     await _databaseService.transactionBox.delete(id);
-    _loadTransactions();
+    await _loadTransactions();
   }
 
   // 実績のみを対象とした月次サマリーを取得するメソッド
@@ -410,7 +415,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
         }
       }
     }
-    _loadTransactions();
+    await _loadTransactions();
   }
 
   // データエクスポート
@@ -548,7 +553,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
           await _databaseService.transactionBox.put(transaction.id, transaction);
         }
 
-        _loadTransactions();
+        await _loadTransactions();
       }
     } catch (e) {
       print('インポートエラー: $e');
@@ -648,7 +653,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
         }
       }
       
-      _loadTransactions();
+      await _loadTransactions();
       return importedCount;
     } catch (e) {
       print('CSVインポートエラー: $e');
@@ -692,7 +697,7 @@ class TransactionService extends StateNotifier<List<Transaction>> {
   // 全データクリア
   Future<void> clearAllData() async {
     await _databaseService.transactionBox.clear();
-    _loadTransactions();
+    await _loadTransactions();
   }
 }
 

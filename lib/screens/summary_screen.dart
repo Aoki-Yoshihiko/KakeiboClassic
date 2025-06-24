@@ -16,8 +16,16 @@ class SummaryScreen extends ConsumerStatefulWidget {
 
 class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
-  DateTime _endDate = DateTime.now().add(const Duration(days: 30)); // 未来30日まで初期設定
+  DateTime _startDate = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day
+  ).subtract(const Duration(days: 30));
+  DateTime _endDate = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day
+  ).add(const Duration(days: 30)); // 未来30日まで初期設定
 
   @override
   void initState() {
@@ -178,17 +186,19 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
 
   void _getLast30Days() {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     setState(() {
-      _startDate = now.subtract(const Duration(days: 30));
-      _endDate = now;
+      _startDate = today.subtract(const Duration(days: 30));
+      _endDate = today;
     });
   }
 
   void _getNext30Days() {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     setState(() {
-      _startDate = now;
-      _endDate = now.add(const Duration(days: 30));
+      _startDate = today;
+      _endDate = today.add(const Duration(days: 30));
     });
   }
 
@@ -209,7 +219,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
       locale: const Locale('ja', 'JP'),
     );
     if (date != null && date.isBefore(_endDate.add(const Duration(days: 1)))) {
-      setState(() => _startDate = date);
+      setState(() => _startDate = DateTime(date.year, date.month, date.day));
     }
   }
 
@@ -222,7 +232,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> with SingleTicker
       locale: const Locale('ja', 'JP'),
     );
     if (date != null) {
-      setState(() => _endDate = date);
+      setState(() => _endDate = DateTime(date.year, date.month, date.day));
     }
   }
 

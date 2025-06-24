@@ -15,8 +15,16 @@ class CSVExportDialog extends ConsumerStatefulWidget {
 
 class _CSVExportDialogState extends ConsumerState<CSVExportDialog> {
   String _selectedOption = 'all';
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
-  DateTime _endDate = DateTime.now();
+  DateTime _startDate = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day
+  ).subtract(const Duration(days: 30));
+  DateTime _endDate = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day
+  );
   bool _isExporting = false;
 
   @override
@@ -175,7 +183,7 @@ class _CSVExportDialogState extends ConsumerState<CSVExportDialog> {
       locale: const Locale('ja', 'JP'),
     );
     if (date != null) {
-      setState(() => _startDate = date);
+      setState(() => _startDate = DateTime(date.year, date.month, date.day));
     }
   }
 
@@ -188,7 +196,7 @@ class _CSVExportDialogState extends ConsumerState<CSVExportDialog> {
       locale: const Locale('ja', 'JP'),
     );
     if (date != null) {
-      setState(() => _endDate = date);
+      setState(() => _endDate = DateTime(date.year, date.month, date.day));
     }
   }
 
@@ -205,7 +213,8 @@ class _CSVExportDialogState extends ConsumerState<CSVExportDialog> {
           break;
         case 'month':
           final now = DateTime.now();
-          filePath = await transactionService.exportMonthToCSV(now);
+          final monthStart = DateTime(now.year, now.month, 1);
+          filePath = await transactionService.exportMonthToCSV(monthStart);
           break;
         case 'period':
           filePath = await transactionService.exportPeriodToCSV(_startDate, _endDate);
